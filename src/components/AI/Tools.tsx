@@ -1,17 +1,6 @@
 import { useRef, useState, useEffect } from "react";
-import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { AgentFactory } from "@/components/AI/AgentFactory";
-// import dotenv from 'dotenv';
-
-// dotenv.config();
-
-// const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-// const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
-
-const openai = new OpenAI({ apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '');
 
 // Zod schemas for structured outputs
 const MarketAnalysis = z.object({
@@ -30,30 +19,6 @@ const AISimulation = z.object({
   })),
   outcome: z.string(),
   ethicalConsiderations: z.array(z.string()),
-});
-
-const TradingStrategy = z.object({
-  asset: z.string(),
-  timeFrame: z.string(),
-  entryPoints: z.array(z.string()),
-  exitPoints: z.array(z.string()),
-  riskManagement: z.string(),
-  potentialProfitPercentage: z.number(),
-});
-
-const SmartContractAudit = z.object({
-  contractName: z.string(),
-  vulnerabilities: z.array(z.string()),
-  optimizationSuggestions: z.array(z.string()),
-  overallSecurity: z.enum(["Low", "Medium", "High"]),
-});
-
-const TokenomicsAnalysis = z.object({
-  tokenName: z.string(),
-  distribution: z.record(z.string(), z.number()),
-  inflationRate: z.number(),
-  utilityAnalysis: z.string(),
-  competitiveAdvantage: z.string(),
 });
 
 export const useAITools = () => {
@@ -78,32 +43,23 @@ export const useAITools = () => {
   const runMarketAnalysis = async (asset: string): Promise<z.infer<typeof MarketAnalysis>> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
-        `Analyze the market for ${asset}. Include overall sentiment, key factors, potential risks, and recommendations.`,
-        5
-      );
-      
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          const analysisText = messages[messages.length - 1].content;
-          
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4-0125-preview",
-            messages: [
-              { role: "system", content: "You are a financial analyst. Convert the following market analysis into a structured format." },
-              { role: "user", content: analysisText }
-            ],
-            response_format: { type: "json_object" },
-          });
+      const response = await fetch('/api/market-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ asset }),
+      });
 
-          const structuredAnalysis = JSON.parse(completion.choices[0].message.content || '{}');
-          return MarketAnalysis.parse(structuredAnalysis);
-        }
+      if (!response.ok) {
+        throw new Error('Failed to generate market analysis');
       }
-      throw new Error("Failed to generate market analysis");
+
+      const data = await response.json();
+      return MarketAnalysis.parse(data);
     } catch (err) {
       console.error("Error in market analysis:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
@@ -113,33 +69,30 @@ export const useAITools = () => {
   const runAISimulation = async (scenario: string): Promise<z.infer<typeof AISimulation>> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
-        `Run an AI simulation for the following scenario: ${scenario}. Include details about the agents involved, their actions, the outcome, and ethical considerations.`,
-        7
-      );
-      
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          const simulationText = messages[messages.length - 1].content;
-          
-          const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
-          const result = await model.generateContent(`Convert the following AI simulation into a structured JSON format: ${simulationText}`);
-          const generatedText = result.response.text();
-          const structuredSimulation = JSON.parse(generatedText);
-          return AISimulation.parse(structuredSimulation);
-        }
+      const response = await fetch('/api/ai-simulation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ scenario }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to run AI simulation');
       }
-      throw new Error("Failed to run AI simulation");
+
+      const data = await response.json();
+      return AISimulation.parse(data);
     } catch (err) {
       console.error("Error in AI simulation:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const generateTradingStrategy = async (asset: string, timeFrame: string): Promise<z.infer<typeof TradingStrategy>> => {
+  const generateTradingStrategy = async (asset: string, timeFrame: string): Promise<string> => {
     setLoading(true);
     try {
       const agentId = await agentFactoryRef.current?.createAgent(
@@ -150,21 +103,20 @@ export const useAITools = () => {
       if (agentId !== undefined) {
         const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
         if (messages && messages.length > 0) {
-          const strategyText = messages[messages.length - 1].content;
-          const strategyJson = JSON.parse(strategyText);
-          return TradingStrategy.parse(strategyJson);
+          return messages[messages.length - 1].content;
         }
       }
       throw new Error("Failed to generate trading strategy");
     } catch (err) {
       console.error("Error generating trading strategy:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const auditSmartContract = async (contractCode: string): Promise<z.infer<typeof SmartContractAudit>> => {
+  const auditSmartContract = async (contractCode: string): Promise<string> => {
     setLoading(true);
     try {
       const agentId = await agentFactoryRef.current?.createAgent(
@@ -175,21 +127,20 @@ export const useAITools = () => {
       if (agentId !== undefined) {
         const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
         if (messages && messages.length > 0) {
-          const auditText = messages[messages.length - 1].content;
-          const auditJson = JSON.parse(auditText);
-          return SmartContractAudit.parse(auditJson);
+          return messages[messages.length - 1].content;
         }
       }
       throw new Error("Failed to audit smart contract");
     } catch (err) {
       console.error("Error auditing smart contract:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const analyzeTokenomics = async (tokenName: string, tokenData: string): Promise<z.infer<typeof TokenomicsAnalysis>> => {
+  const analyzeTokenomics = async (tokenName: string, tokenData: string): Promise<string> => {
     setLoading(true);
     try {
       const agentId = await agentFactoryRef.current?.createAgent(
@@ -200,24 +151,13 @@ export const useAITools = () => {
       if (agentId !== undefined) {
         const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
         if (messages && messages.length > 0) {
-          const analysisText = messages[messages.length - 1].content;
-          
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4-0125-preview",
-            messages: [
-              { role: "system", content: "You are a tokenomics expert. Convert the following analysis into a structured format." },
-              { role: "user", content: analysisText }
-            ],
-            response_format: { type: "json_object" },
-          });
-
-          const structuredAnalysis = JSON.parse(completion.choices[0].message.content || '{}');
-          return TokenomicsAnalysis.parse(structuredAnalysis);
+          return messages[messages.length - 1].content;
         }
       }
       throw new Error("Failed to analyze tokenomics");
     } catch (err) {
       console.error("Error in tokenomics analysis:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
@@ -241,6 +181,7 @@ export const useAITools = () => {
       throw new Error("Failed to generate DeFi strategy");
     } catch (err) {
       console.error("Error generating DeFi strategy:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
@@ -250,11 +191,21 @@ export const useAITools = () => {
   const predictMarketTrends = async (timeframe: string, assets: string[]): Promise<string> => {
     setLoading(true);
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
-      const result = await model.generateContent(`Predict market trends for the following assets: ${assets.join(", ")} over the next ${timeframe}. Include potential catalysts and risk factors.`);
-      return result.response.text();
+      const agentId = await agentFactoryRef.current?.createAgent(
+        `Predict market trends for the following assets: ${assets.join(", ")} over the next ${timeframe}. Include potential catalysts and risk factors.`,
+        5
+      );
+
+      if (agentId !== undefined) {
+        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
+        if (messages && messages.length > 0) {
+          return messages[messages.length - 1].content;
+        }
+      }
+      throw new Error("Failed to predict market trends");
     } catch (err) {
       console.error("Error predicting market trends:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
@@ -278,6 +229,7 @@ export const useAITools = () => {
       throw new Error("Failed to analyze on-chain data");
     } catch (err) {
       console.error("Error analyzing on-chain data:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
@@ -301,6 +253,7 @@ export const useAITools = () => {
       throw new Error("Failed to generate NFT idea");
     } catch (err) {
       console.error("Error generating NFT idea:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);
@@ -324,6 +277,7 @@ export const useAITools = () => {
       throw new Error("Failed to analyze crypto regulation");
     } catch (err) {
       console.error("Error analyzing crypto regulation:", err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
       throw err;
     } finally {
       setLoading(false);

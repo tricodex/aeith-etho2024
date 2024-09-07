@@ -13,6 +13,31 @@ import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 
+interface MarketAnalysis {
+  overallSentiment: "Bullish" | "Bearish" | "Neutral";
+  keyFactors: string[];
+  potentialRisks: string[];
+  recommendations: string[];
+}
+
+interface AISimulation {
+  scenario: string;
+  agents: Array<{
+    name: string;
+    role: string;
+    action: string;
+  }>;
+  outcome: string;
+  ethicalConsiderations: string[];
+}
+
+// Define a type for the possible result shapes
+type ResultType =
+  | MarketAnalysis
+  | AISimulation
+  | string
+  | null;
+
 const GrandhardPage: React.FC = () => {
   const {
     loading,
@@ -31,14 +56,14 @@ const GrandhardPage: React.FC = () => {
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState('market-analysis');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ResultType>(null);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     setResult(null);
   };
 
-  const handleAction = async (action: () => Promise<any>) => {
+  const handleAction = async (action: () => Promise<ResultType>) => {
     try {
       setResult(null);
       const data = await action();
@@ -56,6 +81,7 @@ const GrandhardPage: React.FC = () => {
       });
     }
   };
+
 
   return (
     <Card className="w-full max-w-7xl mx-auto">
