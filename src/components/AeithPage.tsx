@@ -38,7 +38,7 @@ type ResultType =
   | string
   | null;
 
-const GrandhardPage: React.FC = () => {
+const AeithPage: React.FC = () => {
   const {
     loading,
     error,
@@ -267,4 +267,4 @@ const GrandhardPage: React.FC = () => {
   );
 };
 
-export default GrandhardPage;
+export default AeithPage;
