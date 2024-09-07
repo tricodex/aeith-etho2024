@@ -1,22 +1,11 @@
+// src/context/Web3AuthContext.tsx
 'use client';
-
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Web3AuthMPCCoreKit, WEB3AUTH_NETWORK } from "@web3auth/mpc-core-kit";
 import { tssLib } from "@toruslabs/tss-dkls-lib";
-import { EthereumSigningProvider } from "@web3auth/ethereum-mpc-provider";
 import { CHAIN_NAMESPACES, CustomChainConfig } from "@web3auth/base";
+import { EthereumSigningProvider } from "@web3auth/ethereum-mpc-provider";
 import { makeEthereumSigner } from "@web3auth/mpc-core-kit";
-
-
-const chainConfig: CustomChainConfig = {
-  chainNamespace: CHAIN_NAMESPACES.EIP155,
-  chainId: "0x1", // Ethereum mainnet
-  rpcTarget: "https://rpc.ankr.com/eth",
-  displayName: "Ethereum Mainnet",
-  blockExplorerUrl: "https://etherscan.io", // Changed from blockExplorer to blockExplorerUrl
-  ticker: "ETH",
-  tickerName: "Ethereum",
-};
 
 interface UserInfo {
   email?: string;
@@ -29,67 +18,82 @@ interface UserInfo {
 interface Web3AuthContextType {
   web3auth: Web3AuthMPCCoreKit | null;
   provider: EthereumSigningProvider | null;
-  user: UserInfo | null;
   isLoading: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
+  user: UserInfo | null;
 }
 
 const Web3AuthContext = createContext<Web3AuthContextType>({
   web3auth: null,
   provider: null,
-  user: null,
-  isLoading: false,
+  isLoading: true,
   login: async () => {},
   logout: async () => {},
+  user: null,
 });
 
 export const useWeb3Auth = () => useContext(Web3AuthContext);
 
+// Galadriel chain configuration
+const chainConfig: CustomChainConfig = {
+  chainNamespace: CHAIN_NAMESPACES.EIP155,
+  chainId: "696969", // Galadriel Devnet chain ID
+  rpcTarget: process.env.NEXT_PUBLIC_GALADRIEL_RPC_URL || "https://devnet.galadriel.com",
+  displayName: "Galadriel",
+  blockExplorerUrl: "https://explorer.galadriel.com",
+  ticker: "GAL",
+  tickerName: "Galadriel",
+};
+
 export const Web3AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [web3auth, setWeb3auth] = useState<Web3AuthMPCCoreKit | null>(null);
   const [provider, setProvider] = useState<EthereumSigningProvider | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const init = async () => {
       try {
-        const web3auth = new Web3AuthMPCCoreKit({
+        // Initialize the Web3Auth instance
+        const web3authInstance = new Web3AuthMPCCoreKit({
           web3AuthClientId: process.env.NEXT_PUBLIC_WEB3AUTH_CLIENT_ID!,
           web3AuthNetwork: WEB3AUTH_NETWORK.MAINNET,
           tssLib: tssLib,
-          storage: window.localStorage,
-          manualSync: true,
+          storage: window.localStorage, // Set up storage
+          manualSync: true, // Recommended for sync
         });
 
-        await web3auth.init();
+        // Initialize the instance
+        await web3authInstance.init();
 
-        // Instead of web3auth.provider, use makeEthereumSigner
+        // Setup the signing provider for Galadriel
         const ethereumProvider = new EthereumSigningProvider({ config: { chainConfig } });
-        ethereumProvider.setupProvider(makeEthereumSigner(web3auth));
-        setWeb3auth(web3auth);
+        await ethereumProvider.setupProvider(makeEthereumSigner(web3authInstance));
+
+        setWeb3auth(web3authInstance);
         setProvider(ethereumProvider);
+        setIsLoading(false);
       } catch (error) {
-        console.error(error);
+        console.error("Error initializing Web3Auth:", error);
+        setIsLoading(false);
       }
     };
 
     init();
   }, []);
 
+  // Login function using OAuth
   const login = async () => {
     if (!web3auth) {
       console.log("web3auth not initialized yet");
       return;
     }
-    setIsLoading(true);
     try {
-      // Use loginWithOAuth instead of connect
       await web3auth.loginWithOAuth({
         subVerifierDetails: {
-          typeOfLogin: "google",
-          verifier: "your-verifier-name",
+          typeOfLogin: 'google',
+          verifier: 'grandhard-firebase', // Use your Firebase verifier
           clientId: process.env.NEXT_PUBLIC_WEB3AUTH_CLIENT_ID!,
         },
       });
@@ -98,29 +102,21 @@ export const Web3AuthProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (error) {
       console.error("Error during login:", error);
     }
-    setIsLoading(false);
   };
 
+  // Logout function
   const logout = async () => {
     if (!web3auth) {
       console.log("web3auth not initialized yet");
       return;
     }
-    setIsLoading(true);
     await web3auth.logout();
-    setProvider(null);
     setUser(null);
-    setIsLoading(false);
   };
 
-  const value = {
-    web3auth,
-    provider,
-    user,
-    isLoading,
-    login,
-    logout,
-  };
-
-  return <Web3AuthContext.Provider value={value}>{children}</Web3AuthContext.Provider>;
+  return (
+    <Web3AuthContext.Provider value={{ web3auth, provider, isLoading, login, logout, user }}>
+      {children}
+    </Web3AuthContext.Provider>
+  );
 };

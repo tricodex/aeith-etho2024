@@ -1,6 +1,8 @@
-import { useRef, useState, useEffect } from "react";
+// src/hooks/useAITools.tsx
+
+import { useState, useEffect } from "react";
 import { z } from "zod";
-import { AgentFactory } from "@/components/AI/AgentFactory";
+import { useAgentFactory } from "./useAgentFactory";
 
 // Zod schemas for structured outputs
 const MarketAnalysis = z.object({
@@ -22,23 +24,21 @@ const AISimulation = z.object({
 });
 
 export const useAITools = () => {
-  const agentFactoryRef = useRef<AgentFactory | null>(null);
+  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '';
+  const { 
+    createAgent, 
+    getAgentMessages, 
+    error: factoryError 
+  } = useAgentFactory(contractAddress);
+  
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
-    const providerUrl = process.env.NEXT_PUBLIC_PROVIDER_URL;
-    
-    if (contractAddress && providerUrl) {
-      agentFactoryRef.current = new AgentFactory({
-        contractAddress,
-        providerUrl,
-      });
-    } else {
-      setError("Missing environment variables for AgentFactory");
+    if (factoryError) {
+      setError(factoryError);
     }
-  }, []);
+  }, [factoryError]);
 
   const runMarketAnalysis = async (asset: string): Promise<z.infer<typeof MarketAnalysis>> => {
     setLoading(true);
@@ -95,16 +95,14 @@ export const useAITools = () => {
   const generateTradingStrategy = async (asset: string, timeFrame: string): Promise<string> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
+      const agentId = await createAgent(
         `Generate a trading strategy for ${asset} on a ${timeFrame} timeframe. Include entry points, exit points, risk management, and potential profit percentage.`,
         5
       );
 
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          return messages[messages.length - 1].content;
-        }
+      const messages = await getAgentMessages(agentId);
+      if (messages && messages.length > 0) {
+        return messages[messages.length - 1].content;
       }
       throw new Error("Failed to generate trading strategy");
     } catch (err) {
@@ -119,16 +117,14 @@ export const useAITools = () => {
   const auditSmartContract = async (contractCode: string): Promise<string> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
+      const agentId = await createAgent(
         `Audit the following smart contract code for vulnerabilities and optimization suggestions:\n\n${contractCode}`,
         7
       );
 
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          return messages[messages.length - 1].content;
-        }
+      const messages = await getAgentMessages(agentId);
+      if (messages && messages.length > 0) {
+        return messages[messages.length - 1].content;
       }
       throw new Error("Failed to audit smart contract");
     } catch (err) {
@@ -143,16 +139,14 @@ export const useAITools = () => {
   const analyzeTokenomics = async (tokenName: string, tokenData: string): Promise<string> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
+      const agentId = await createAgent(
         `Analyze the tokenomics for ${tokenName} with the following data:\n\n${tokenData}`,
         6
       );
 
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          return messages[messages.length - 1].content;
-        }
+      const messages = await getAgentMessages(agentId);
+      if (messages && messages.length > 0) {
+        return messages[messages.length - 1].content;
       }
       throw new Error("Failed to analyze tokenomics");
     } catch (err) {
@@ -167,16 +161,14 @@ export const useAITools = () => {
   const generateDeFiStrategy = async (investmentGoal: string, riskTolerance: string): Promise<string> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
+      const agentId = await createAgent(
         `Generate a DeFi strategy for the following investment goal: ${investmentGoal}. Risk tolerance: ${riskTolerance}. Include recommended protocols, estimated yields, and step-by-step instructions.`,
         6
       );
 
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          return messages[messages.length - 1].content;
-        }
+      const messages = await getAgentMessages(agentId);
+      if (messages && messages.length > 0) {
+        return messages[messages.length - 1].content;
       }
       throw new Error("Failed to generate DeFi strategy");
     } catch (err) {
@@ -191,16 +183,14 @@ export const useAITools = () => {
   const predictMarketTrends = async (timeframe: string, assets: string[]): Promise<string> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
+      const agentId = await createAgent(
         `Predict market trends for the following assets: ${assets.join(", ")} over the next ${timeframe}. Include potential catalysts and risk factors.`,
         5
       );
 
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          return messages[messages.length - 1].content;
-        }
+      const messages = await getAgentMessages(agentId);
+      if (messages && messages.length > 0) {
+        return messages[messages.length - 1].content;
       }
       throw new Error("Failed to predict market trends");
     } catch (err) {
@@ -215,16 +205,14 @@ export const useAITools = () => {
   const analyzeOnChainData = async (address: string, chainId: number): Promise<string> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
+      const agentId = await createAgent(
         `Analyze on-chain data for address ${address} on chain ID ${chainId}. Provide insights on transaction patterns, token holdings, and interaction with DeFi protocols.`,
         5
       );
 
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          return messages[messages.length - 1].content;
-        }
+      const messages = await getAgentMessages(agentId);
+      if (messages && messages.length > 0) {
+        return messages[messages.length - 1].content;
       }
       throw new Error("Failed to analyze on-chain data");
     } catch (err) {
@@ -239,16 +227,14 @@ export const useAITools = () => {
   const generateNFTIdea = async (theme: string): Promise<string> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
+      const agentId = await createAgent(
         `Generate a unique NFT collection idea based on the theme: ${theme}. Include concept, artwork style, potential utility, and target audience.`,
         4
       );
 
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          return messages[messages.length - 1].content;
-        }
+      const messages = await getAgentMessages(agentId);
+      if (messages && messages.length > 0) {
+        return messages[messages.length - 1].content;
       }
       throw new Error("Failed to generate NFT idea");
     } catch (err) {
@@ -263,16 +249,14 @@ export const useAITools = () => {
   const analyzeCryptoRegulation = async (country: string): Promise<string> => {
     setLoading(true);
     try {
-      const agentId = await agentFactoryRef.current?.createAgent(
+      const agentId = await createAgent(
         `Analyze the current cryptocurrency regulations in ${country}. Include key laws, regulatory bodies, and recent developments.`,
         5
       );
 
-      if (agentId !== undefined) {
-        const messages = await agentFactoryRef.current?.getAgentMessages(agentId);
-        if (messages && messages.length > 0) {
-          return messages[messages.length - 1].content;
-        }
+      const messages = await getAgentMessages(agentId);
+      if (messages && messages.length > 0) {
+        return messages[messages.length - 1].content;
       }
       throw new Error("Failed to analyze crypto regulation");
     } catch (err) {

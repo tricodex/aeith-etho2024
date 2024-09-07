@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import useAITools from '@/components/AI/Tools';
+import useAITools from '@/hooks/useAITools';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
