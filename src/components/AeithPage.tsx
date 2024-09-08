@@ -119,8 +119,10 @@ const AeithPage: React.FC = () => {
     }
   };
 
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
   const handleChatSubmit = async () => {
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() || isChatLoading) return;
 
     setIsChatLoading(true);
     try {
@@ -145,7 +147,7 @@ const AeithPage: React.FC = () => {
         const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
         setChatMessages(prev => [...prev, { 
           role: 'assistant', 
-          content: lastAssistantMessage.content[0].value 
+          content: lastAssistantMessage.content[0].toString()
         }]);
       }
 
@@ -153,16 +155,22 @@ const AeithPage: React.FC = () => {
       const finished = await isAgentFinished(chatAgentId!);
       if (finished) {
         console.log("Chat finished");
-        // Handle chat completion (e.g., disable input, show a message)
+        toast({
+          title: "Chat Completed",
+          description: "The AI has finished processing your requests.",
+        });
       }
     } catch (err) {
       console.error("Error in chat interaction:", err);
-      // Handle error (e.g., show an error message to the user)
+      toast({
+        title: "Error",
+        description: "An error occurred during the chat. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsChatLoading(false);
     }
   };
-
 
   return (
     <div className="container mx-auto p-4">
@@ -197,39 +205,42 @@ const AeithPage: React.FC = () => {
             </TabsList>
             
             <TabsContent value="chat">
-              <Card>
-                <CardHeader>
-                  <CardTitle>AI Assistant Chat</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[400px] w-full rounded-md border p-4">
-                    {chatMessages.map((msg, index) => (
-                      <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-2`}>
-                        <div className={`flex items-start ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                          <Avatar className="w-8 h-8 mr-2">
-                            <AvatarImage src={msg.role === 'user' ? '/svgs/aeith-logo.svg' : '/svgs/aeith-logo.svg'} />
-                            <AvatarFallback>{msg.role === 'user' ? 'U' : 'AI'}</AvatarFallback>
-                          </Avatar>
-                          <div className={`rounded-lg p-2 ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
-                            {msg.content}
-                          </div>
-                        </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Assistant Chat</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+                {chatMessages.map((msg, index) => (
+                  <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-2`}>
+                    <div className={`flex items-start ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <Avatar className="w-8 h-8 mr-2">
+                        <AvatarImage src={msg.role === 'user' ? '/svgs/user-avatar.svg' : '/svgs/ai-avatar.svg'} />
+                        <AvatarFallback>{msg.role === 'user' ? 'U' : 'AI'}</AvatarFallback>
+                      </Avatar>
+                      <div className={`rounded-lg p-2 ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                        {msg.content}
                       </div>
-                    ))}
-                    <div ref={chatEndRef} />
-                  </ScrollArea>
-                  <div className="flex mt-4">
-                    <Input
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      placeholder="Type your message here..."
-                      className="flex-grow mr-2"
-                    />
-                    <Button onClick={handleChatSubmit}>Send</Button>
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                ))}
+                <div ref={chatEndRef} />
+              </ScrollArea>
+              <div className="flex mt-4">
+                <Input
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  placeholder="Type your message here..."
+                  className="flex-grow mr-2"
+                  onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
+                />
+                <Button onClick={handleChatSubmit} disabled={isChatLoading}>
+                  {isChatLoading ? "Sending..." : "Send"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
             
             <TabsContent value="market-analysis">
               <Card>

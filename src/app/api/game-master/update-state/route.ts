@@ -1,50 +1,108 @@
 // src/app/api/game-master/update-state/route.ts
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { z } from 'zod';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { cleanJson } from '@/utils/cleanJson'; // Import the cleanJson utility
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
+// Initialize the API client with your environment variable for the API key
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '');
 
-const UpdatedGameState = z.object({
-  players: z.array(z.object({
-    name: z.string(),
-    position: z.object({ x: z.number(), y: z.number() }),
-    inventory: z.array(z.string())
-  })),
-  discoveredRooms: z.array(z.string()),
-  revealedClues: z.array(z.string()),
-  gameProgress: z.number(),
-  currentTurn: z.string(),
-  events: z.array(z.string())
-});
+// Define the expected JSON schema using SchemaType
+const gameStateSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    players: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          name: { type: SchemaType.STRING },
+          position: {
+            type: SchemaType.OBJECT,
+            properties: {
+              x: { type: SchemaType.NUMBER },
+              y: { type: SchemaType.NUMBER },
+            },
+          },
+          inventory: {
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING },
+          },
+        },
+      },
+    },
+    discoveredRooms: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+    revealedClues: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+    gameProgress: { type: SchemaType.NUMBER },
+    currentTurn: { type: SchemaType.STRING },
+    events: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+  },
+};
+
+// Default data for fallback
+const defaultGameState = {
+  players: [],
+  discoveredRooms: [],
+  revealedClues: [],
+  gameProgress: 0,
+  currentTurn: "N/A",
+  events: ["No significant events."],
+};
 
 export async function POST(request: Request) {
+  console.group('Game State Update Process');
+  console.time('Game State Update API Call');
+
   try {
     const { currentState, playerActions } = await request.json();
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-    const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [{ text: `Update the game state based on the following:
-          Current State: ${JSON.stringify(currentState)}
-          Player Actions: ${JSON.stringify(playerActions)}
-          Provide an updated game state, including player positions, discovered rooms, revealed clues, game progress, and any new events. Respond in a structured JSON format.` }]
-      }],
+    console.log('Updating game state based on player actions:', playerActions);
+
+    // Prompt to update the game state
+    const prompt = `
+    Update the game state based on the following:
+    Current State: ${JSON.stringify(currentState)}
+    Player Actions: ${JSON.stringify(playerActions)}
+    Provide an updated game state, including player positions, discovered rooms, revealed clues, game progress, and any new events. Respond in a structured JSON format.
+    `;
+
+    // Make the API call to Gemini 1.5 flash model
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
       generationConfig: {
-        temperature: 0.6,
-        topK: 1,
-        topP: 1,
-        maxOutputTokens: 1536,
+        responseMimeType: "application/json",  // Enforce JSON response
+        responseSchema: gameStateSchema,  // Provide the expected schema
       },
     });
 
-    const generatedText = await result.response.text();
-    const structuredState = JSON.parse(generatedText);
-    const updatedGameState = UpdatedGameState.parse(structuredState);
+    const result = await model.generateContent(prompt);
+    const rawResponse = result.response.text();
+    console.log('Raw AI response:', rawResponse);
 
-    return NextResponse.json(updatedGameState);
+    // Clean and parse the JSON response
+    const cleanedText = cleanJson(rawResponse);  // Use the cleanJson function to sanitize the response
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(cleanedText);  // Parse the response into JSON
+    } catch (error) {
+      console.error('Failed to parse AI response. Response might not be valid JSON:', error);
+      throw new Error('Invalid AI response format');
+    }
+
+    console.log('Parsed AI response:', JSON.stringify(parsedResponse, null, 2));
+
+    // Log the updated game state
+    console.log('Updated Game State:', parsedResponse);
+
+    console.timeEnd('Game State Update API Call');
+    console.groupEnd();
+    return NextResponse.json(parsedResponse);
+
   } catch (error) {
     console.error('Error updating game state:', error);
-    return NextResponse.json({ error: 'Failed to update game state' }, { status: 500 });
+
+    console.timeEnd('Game State Update API Call');
+    console.groupEnd();
+
+    // Return default game state in case of error
+    return NextResponse.json(defaultGameState, { status: 500 });
   }
 }
