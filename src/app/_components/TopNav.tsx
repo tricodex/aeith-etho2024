@@ -1,118 +1,102 @@
-'use client';
+  // src/app/_components/TopNav.tsx
 
-import React from 'react';
-import Image from 'next/image';
-import { useWeb3Auth } from "@/components/Web3AuthProvider";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  'use client'; // Indicates that this component is client-side rendered.
 
-const AeithLogo: React.FC = () => (
-  <div className="flex items-center">
-    <Image
-      src="/svgs/aeith-logo.svg"
-      alt="Aeith Logo"
-      width={32}
-      height={32}
-      className="object-contain mr-2"
-    />
-    <span className="text-3xl font-bold neon-text">
-      Aeith
-    </span>
-  </div>
-);
+  import React, { useEffect } from 'react';
+  import Image from 'next/image';
+  import { useWeb3Auth } from "@/context/Web3AuthContext"; // Custom hook to handle Web3Auth authentication.
+  import { Button } from "@/components/ui/button"; // UI button component from your project.
+  import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+  } from "@/components/ui/dropdown-menu"; // UI components for dropdown functionality.
 
-const TopNav: React.FC = () => {
-  const { user, login, logout, isLoading } = useWeb3Auth();
+  // AeithLogo component renders the logo image and text for the app.
+  const AeithLogo: React.FC = () => {
+    console.log("AeithLogo component rendered");
 
-  return (
-    <nav className="fixed top-0 left-0 right-0 p-5 flex justify-between items-center z-50 bg-gray-900 bg-opacity-80 backdrop-filter backdrop-blur-lg border-b border-cyan-500 border-opacity-30">
-      <AeithLogo />
-      {user ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="neon-btn">
-              {(user.email as string) || 'User'}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="bg-gray-800 border border-cyan-500">
-            <DropdownMenuItem onClick={() => void logout()} className="text-cyan-400 hover:bg-cyan-900 hover:text-white">
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : (
-        <Button
-          onClick={() => void login()}
-          disabled={isLoading}
-          className="neon-btn login-btn"
-        >
-          {isLoading ? "Connecting..." : "Connect"}
-        </Button>
-      )}
-      <style jsx global>{`
-        .neon-text {
-          color: #00ffff;
-          text-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff, 0 0 20px #00ffff;
-        }
-        
-        .neon-btn {
-          background: transparent;
-          color: #00ffff;
-          border: 2px solid #00ffff;
-          padding: 0.5em 1em;
-          font-size: 1rem;
-          font-weight: bold;
-          border-radius: 5px;
-          cursor: pointer;
-          position: relative;
-          overflow: hidden;
-          transition: all 0.3s;
-          text-shadow: 0 0 5px #00ffff;
-          box-shadow: 0 0 5px #00ffff, 0 0 25px #00ffff;
-        }
+    return (
+      <div className="flex items-center">
+        {/* Logo image with the Aeith branding */}
+        <Image
+          src="/svgs/aeith-logo.svg"
+          alt="Aeith Logo"
+          width={32}
+          height={32}
+          className="object-contain mr-2"
+        />
+        {/* Application title */}
+        <span className="text-3xl font-bold neon-text">
+          Aeith
+        </span>
+      </div>
+    );
+  };
 
-        .neon-btn:hover {
-          background: rgba(0, 255, 255, 0.1);
-          box-shadow: 0 0 5px #00ffff, 0 0 25px #00ffff, 0 0 50px #00ffff;
-        }
+  // TopNav component renders the navigation bar at the top of the page.
+  // It handles login/logout actions depending on the authentication state.
+  const TopNav: React.FC = () => {
+    const { user, login, logout, isLoading } = useWeb3Auth(); // Destructuring the Web3Auth context.
 
-        .neon-btn:before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: -100%;
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(
-            120deg,
-            transparent,
-            rgba(0, 255, 255, 0.4),
-            transparent
-          );
-          transition: all 0.4s;
-        }
+    useEffect(() => {
+      console.log("TopNav component rendered");
+      console.log("User:", user);
+      console.log("IsLoading:", isLoading);
+    }, [user, isLoading]); // Logs the user and loading state when they change.
 
-        .neon-btn:hover:before {
-          left: 100%;
-        }
+    // Handles the user connection process.
+    const handleConnect = async () => {
+      console.log("handleConnect called");
+      try {
+        console.log("Attempting login...");
+        await login(); // Initiates the login process.
+        console.log("Login successful");
+      } catch (error) {
+        console.error("Login error:", error);
+      }
+    };
 
-        .login-btn {
-          animation: pulse 2s infinite;
-        }
+    // Logs the user out by calling the logout function from Web3Auth.
+    const handleLogout = () => {
+      console.log("Logout clicked");
+      logout();
+    };
 
-        @keyframes pulse {
-          0% { box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.4); }
-          70% { box-shadow: 0 0 0 10px rgba(0, 255, 255, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(0, 255, 255, 0); }
-        }
-      `}</style>
-    </nav>
-  );
-};
+    return (
+      <nav className="fixed top-0 left-0 right-0 p-5 flex justify-between items-center z-50 bg-gray-900 bg-opacity-80 backdrop-filter backdrop-blur-lg border-b border-cyan-500 border-opacity-30">
+        <AeithLogo />
+        {/* If the user is authenticated, show a dropdown menu with a logout option */}
+        {user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="neon-btn">
+                {/* Log messages should be moved outside JSX to avoid the void issue */}
+                {(user.email as string) || 'User'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-gray-800 border border-cyan-500">
+              <DropdownMenuItem
+                onClick={handleLogout} // Calls the handleLogout function.
+                className="text-cyan-400 hover:bg-cyan-900 hover:text-white"
+              >
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          // If the user is not authenticated, show a button to connect (login)
+          <Button
+            onClick={handleConnect} // Calls the handleConnect function to log in the user.
+            disabled={isLoading} // Disables the button while login is in progress.
+            className="neon-btn login-btn"
+          >
+            {isLoading ? "Connecting..." : "Connect"} {/* Changes button text based on loading state */}
+          </Button>
+        )}
+      </nav>
+    );
+  };
 
-export default TopNav;
+  export default TopNav;

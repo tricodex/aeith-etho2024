@@ -102,7 +102,7 @@ export const useAITools = () => {
 
       const messages = await getAgentMessages(agentId);
       if (messages && messages.length > 0) {
-        return messages[messages.length - 1].content;
+        return messages[messages.length - 1].content[0].value;
       }
       throw new Error("Failed to generate trading strategy");
     } catch (err) {
@@ -124,7 +124,7 @@ export const useAITools = () => {
 
       const messages = await getAgentMessages(agentId);
       if (messages && messages.length > 0) {
-        return messages[messages.length - 1].content;
+        return messages[messages.length - 1].content[0].value;
       }
       throw new Error("Failed to audit smart contract");
     } catch (err) {
@@ -146,7 +146,7 @@ export const useAITools = () => {
 
       const messages = await getAgentMessages(agentId);
       if (messages && messages.length > 0) {
-        return messages[messages.length - 1].content;
+        return messages[messages.length - 1].content[0].value;
       }
       throw new Error("Failed to analyze tokenomics");
     } catch (err) {
@@ -168,7 +168,7 @@ export const useAITools = () => {
 
       const messages = await getAgentMessages(agentId);
       if (messages && messages.length > 0) {
-        return messages[messages.length - 1].content;
+        return messages[messages.length - 1].content[0].value;
       }
       throw new Error("Failed to generate DeFi strategy");
     } catch (err) {
@@ -190,7 +190,7 @@ export const useAITools = () => {
 
       const messages = await getAgentMessages(agentId);
       if (messages && messages.length > 0) {
-        return messages[messages.length - 1].content;
+        return messages[messages.length - 1].content[0].value;
       }
       throw new Error("Failed to predict market trends");
     } catch (err) {
@@ -212,7 +212,7 @@ export const useAITools = () => {
 
       const messages = await getAgentMessages(agentId);
       if (messages && messages.length > 0) {
-        return messages[messages.length - 1].content;
+        return messages[messages.length - 1].content[0].value;
       }
       throw new Error("Failed to analyze on-chain data");
     } catch (err) {
@@ -234,7 +234,7 @@ export const useAITools = () => {
 
       const messages = await getAgentMessages(agentId);
       if (messages && messages.length > 0) {
-        return messages[messages.length - 1].content;
+        return messages[messages.length - 1].content[0].value;
       }
       throw new Error("Failed to generate NFT idea");
     } catch (err) {
@@ -256,7 +256,7 @@ export const useAITools = () => {
 
       const messages = await getAgentMessages(agentId);
       if (messages && messages.length > 0) {
-        return messages[messages.length - 1].content;
+        return messages[messages.length - 1].content[0].value;
       }
       throw new Error("Failed to analyze crypto regulation");
     } catch (err) {

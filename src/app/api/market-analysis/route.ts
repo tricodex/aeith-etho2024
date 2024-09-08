@@ -15,8 +15,8 @@ export async function POST(request: Request) {
   try {
     const { asset } = await request.json();
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4-0125-preview",
+    const completion = await openai.beta.chat.completions.parse({
+              model: "gpt-4o",
       messages: [
         { role: "system", content: "You are a financial analyst. Provide a market analysis for the given asset." },
         { role: "user", content: `Analyze the market for ${asset}. Include overall sentiment, key factors, potential risks, and recommendations.` }

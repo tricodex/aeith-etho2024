@@ -98,6 +98,9 @@ importers:
       '@web3auth/ethereum-mpc-provider':
         specifier: ^8.6.1
         version: 8.12.4(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      '@web3auth/metamask-adapter':
+        specifier: ^8.12.4
+        version: 8.12.4(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       '@web3auth/mpc-core-kit':
         specifier: 3.0.0
         version: 3.0.0(@babel/runtime@7.25.6)(@toruslabs/metadata-helpers@6.0.0(@babel/runtime@7.25.6))(bufferutil@4.0.8)(encoding@0.1.12)(eslint@8.57.0)(prettier@3.3.3)(typescript@5.5.4)(utf-8-validate@5.0.10)(zod@3.23.8)
@@ -1287,6 +1290,10 @@ packages:
   '@metamask/abi-utils@2.0.4':
     resolution: {integrity: sha512-StnIgUB75x7a7AgUhiaUZDpCsqGp7VkNnZh2XivXkJ6mPkE83U8ARGQj5MbRis7VJY8BC5V1AbB1fjdh0hupPQ==}
     engines: {node: '>=16.0.0'}
+
+  '@metamask/detect-provider@2.0.0':
+    resolution: {integrity: sha512-sFpN+TX13E9fdBDh9lvQeZdJn4qYoRb/6QF2oZZK/Pn559IhCFacPMU1rMuqyXoFQF3JSJfii2l98B87QDPeCQ==}
+    engines: {node: '>=14.0.0'}
 
   '@metamask/eth-json-rpc-provider@1.0.1':
     resolution: {integrity: sha512-whiUMPlAOrVGmX8aKYVPvlKyG4CpQXiNNyt74vE1xb5sPvmx5oA7B/kOi/JdBvhGQq97U1/AVdXEdk2zkP8qyA==}
@@ -3137,6 +3144,12 @@ packages:
   '@walletconnect/window-metadata@1.0.1':
     resolution: {integrity: sha512-9koTqyGrM2cqFRW517BPY/iEtUDx2r1+Pwwu5m7sJ7ka79wi3EyqhqcICk/yDmv6jAS1rjKgTKXlEhanYjijcA==}
 
+  '@web3auth/base-evm-adapter@8.12.4':
+    resolution: {integrity: sha512-mbcD9sJd0EDS4I3Zk32I+fIkWLgPXCOFSrwxMMUc1g4IKlRSWWO+WTZKSbx5/1w9cjzOHiwf6C+uDB5vNv2XGg==}
+    engines: {node: '>=18.x', npm: '>=9.x'}
+    peerDependencies:
+      '@babel/runtime': ^7.x
+
   '@web3auth/base-provider@8.12.4':
     resolution: {integrity: sha512-LXhc0h/EG9FWGg86+CiLOi2XyZl9rm/fzJmuX8aP7bQbGz+TfbtSIX+0hZvYTAXJnj7vcHCMUj+hwh8hKn6W0A==}
     engines: {node: '>=18.x', npm: '>=9.x'}
@@ -3160,6 +3173,12 @@ packages:
     engines: {node: '>=18.x', npm: '>=9.x'}
     peerDependencies:
       '@babel/runtime': 7.x
+
+  '@web3auth/metamask-adapter@8.12.4':
+    resolution: {integrity: sha512-Kpens2TIsoj8B7Q9i60xJkx1ptgtFvmg54tnbC2tzDq9Vpfn1ivpoWd6EtjKH3HaYCK98LifjLcQKhUQeV3/Fg==}
+    engines: {node: '>=18.x', npm: '>=9.x'}
+    peerDependencies:
+      '@babel/runtime': ^7.x
 
   '@web3auth/mpc-core-kit@3.0.0':
     resolution: {integrity: sha512-GdDAi1lsoSuJihGCN6pGZaZAhjy8vBtdOHpD6rYx/58OkQngIiz/s4eSElb4EKnxoCKGTRgwC06Fr/6vSDNI9w==}
@@ -8436,6 +8455,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@metamask/detect-provider@2.0.0': {}
+
   '@metamask/eth-json-rpc-provider@1.0.1':
     dependencies:
       '@metamask/json-rpc-engine': 7.3.3
@@ -11372,6 +11393,17 @@ snapshots:
       '@walletconnect/window-getters': 1.0.1
       tslib: 1.14.1
 
+  '@web3auth/base-evm-adapter@8.12.4(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
+    dependencies:
+      '@babel/runtime': 7.25.6
+      '@toruslabs/base-controllers': 5.11.0(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      '@web3auth/base': 8.12.4(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+    transitivePeerDependencies:
+      - '@sentry/types'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   '@web3auth/base-provider@8.12.4(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
     dependencies:
       '@babel/runtime': 7.25.6
@@ -11436,6 +11468,18 @@ snapshots:
       bignumber.js: 9.1.2
       bn.js: 5.2.1
       jsonschema: 1.4.1
+    transitivePeerDependencies:
+      - '@sentry/types'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
+  '@web3auth/metamask-adapter@8.12.4(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)':
+    dependencies:
+      '@babel/runtime': 7.25.6
+      '@metamask/detect-provider': 2.0.0
+      '@web3auth/base': 8.12.4(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      '@web3auth/base-evm-adapter': 8.12.4(@babel/runtime@7.25.6)(bufferutil@4.0.8)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - '@sentry/types'
       - bufferutil

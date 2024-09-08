@@ -20,7 +20,16 @@ export async function POST(request: Request) {
     const { scenario } = await request.json();
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(`Run an AI simulation for the following scenario: ${scenario}. Include details about the agents involved, their actions, the outcome, and ethical considerations. Respond in JSON format.`);
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: `Run an AI simulation for the following scenario: ${scenario}. Include details about the agents involved, their actions, the outcome, and ethical considerations. Respond in JSON format.` }] }],
+      generationConfig: {
+        temperature: 0.9,
+        topK: 1,
+        topP: 1,
+        maxOutputTokens: 2048,
+      },
+    });
+
     const generatedText = result.response.text();
     const structuredSimulation = JSON.parse(generatedText);
     const simulation = AISimulation.parse(structuredSimulation);
