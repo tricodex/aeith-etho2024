@@ -61,15 +61,14 @@ const HeroSection: React.FC = () => {
       <div className="content-wrapper">
         <div className="hero-content">
           <h1 className="hero-title">
-            <span className="neon-text">AEITH ON-CHAIN GALADRIEL AI</span>
+            <span className="neon-text">AEITH ON-CHAIN MURDER MYSTERY GAME</span>
           </h1>
-          <h2 className="hero-subtitle">AGENTS, AGENTS, AGENTS</h2>
+          <h2 className="hero-subtitle">Galadriel-Powered AI Agents</h2>
           <p className="hero-description">
-            Empowering the future with cutting-edge on-chain AI and agentive frameworks.
-            Build, deploy, and innovate in the decentralized world of tomorrow.
+            Step into a turn-based murder mystery set in a haunted mansion. Play as Blue Fish, Orange Crab, Green Turtle, or Red Donkey, each with unique abilities and objectives. Use chat-based commands and movement inputs to solve the mystery or hide the truth. Powered by Galadriel’s on-chain AI and managed by the Game Master through the Gemini API.
           </p>
           <div className="button-group">
-            <button className="btn btn-primary neon-btn">Login</button>
+            <button className="btn btn-primary neon-btn">Play Now</button>
             <button className="btn btn-secondary">Learn More</button>
           </div>
         </div>

@@ -17,7 +17,7 @@ class AgentGrab {
 
   constructor() {
     const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
-    const privateKey = process.env.NEXT_PUBLIC_PRIVATE_KEY;
+    const privateKey = process.env.PRIVATE_KEY;
     const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
 
     if (!rpcUrl || !privateKey || !contractAddress) {

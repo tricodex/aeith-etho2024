@@ -15,7 +15,7 @@ class GameAgentsGrab {
 
   constructor() {
     const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
-    const privateKey = process.env.NEXT_PUBLIC_PRIVATE_KEY;
+    const privateKey = process.env.PRIVATE_KEY;
 
     if (!rpcUrl || !privateKey) {
       throw new Error("Missing environment variables");
