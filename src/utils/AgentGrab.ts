@@ -2,8 +2,8 @@
 
 import { ethers, Contract, Log } from 'ethers';
 import ABI from './abis/UnifiedChatAgent.json';
-import dotenv from 'dotenv';
-dotenv.config({ path: '/.env.local' });
+// import dotenv from 'dotenv';
+// dotenv.config({ path: '/.env.local' });
 
 interface Message {
   role: string;

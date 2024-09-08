@@ -1,3 +1,4 @@
+// src/app/api/game-master/routes.ts
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { z } from 'zod';
