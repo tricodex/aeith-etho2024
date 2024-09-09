@@ -4,13 +4,18 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { gameEngine } from '@/utils/gameEngine';
-import { GameState, GameAction } from '@/types/gameTypes';
+import { gameEngine } from '@/utils/game-engine/gameEngine';
+import { GameState, GameAction, Player, ChatEntry } from '@/types/gameTypes';
+import { messageBus } from '@/utils/MessageBus';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import styles from '@/styles/MurderMystery.module.css';
 
 const GRID_SIZE = 10;
@@ -35,6 +40,10 @@ const roomSvgs: Record<string, string> = {
   'Guest Bedroom': '/rooms/guest-bedroom.svg',
   'Bathroom': '/rooms/bathroom.svg',
   'Attic': '/rooms/attic.svg',
+  'Nursery': '/rooms/nursery.svg',
+  'Grand Ballroom': '/rooms/grand-ballroom.svg',
+  'Greenhouse': '/rooms/greenhouse.svg',
+  'Music Room': '/rooms/music-room.svg',
 };
 
 interface MurderMysteryGameProps {
@@ -43,7 +52,9 @@ interface MurderMysteryGameProps {
 
 const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [userInput, setUserInput] = useState('');
+  const [selectedAction, setSelectedAction] = useState<GameAction['type'] | null>(null);
+  const [actionDetails, setActionDetails] = useState<any>(null);
+  const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -63,8 +74,7 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
         description: "Failed to initialize game. Please refresh the page.",
         variant: "destructive",
       });
-      // Fallback to a default state
-      setGameState(gameEngine.createDefaultGameState());
+      setGameState(gameEngine.getState());
     } finally {
       setIsLoading(false);
     }
@@ -73,6 +83,29 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
   useEffect(() => {
     initGame();
   }, [initGame]);
+
+  useEffect(() => {
+    messageBus.subscribe('user', handleGameMessage);
+    return () => {
+      messageBus.unsubscribe('user', handleGameMessage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (gameState) {
+      messageBus.updateGameState(gameState);
+    }
+  }, [gameState]);
+
+  const handleGameMessage = useCallback((message: ChatEntry, gameState: GameState) => {
+    setGameState(gameState);
+    if (message.role === 'game_master') {
+      toast({
+        title: "Game Master",
+        description: message.content,
+      });
+    }
+  }, [toast]);
 
   useEffect(() => {
     if (gameState && gameState.mansion && gameState.mansion.layout) {
@@ -99,10 +132,13 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
 
     try {
       const updatedState = await gameEngine.processAction(action);
-      if (!updatedState || !updatedState.mansion || !updatedState.mansion.layout) {
-        throw new Error('Invalid game state after action');
-      }
       setGameState(updatedState);
+
+      messageBus.publish({
+        role: 'user',
+        content: JSON.stringify(action),
+        agentId: 'user',
+      });
 
       if (gameEngine.isGameOver()) {
         toast({
@@ -120,70 +156,148 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     }
   }, [gameState, toast]);
 
-  const handleInputSubmit = useCallback(() => {
-    if (!gameState || !userInput.trim()) return;
+  const handleActionSelect = (value: GameAction['type']) => {
+    setSelectedAction(value);
+    setActionDetails(null);
+  };
 
-    const [action, ...args] = userInput.toLowerCase().split(' ');
-    let gameAction: GameAction;
-
-    try {
-      switch (action) {
-        case 'move':
-          const direction = args[0];
-          const dx = direction === 'right' ? 1 : direction === 'left' ? -1 : 0;
-          const dy = direction === 'down' ? 1 : direction === 'up' ? -1 : 0;
-          gameAction = { type: 'move', playerId: 'user', details: { dx, dy } };
-          break;
-        case 'search':
-          gameAction = { type: 'search', playerId: 'user', details: {} };
-          break;
-        case 'accuse':
-          if (args.length < 3) {
-            throw new Error("Accusation requires suspect, weapon, and location.");
-          }
-          const [suspectId, weaponId, locationId] = args;
-          gameAction = { type: 'accuse', playerId: 'user', details: { suspectId, weaponId, locationId } };
-          break;
-        case 'use':
-          if (args.length < 1) {
-            throw new Error("Use action requires an item ID.");
-          }
-          gameAction = { type: 'use_item', playerId: 'user', details: { itemId: args.join(' ') } };
-          break;
-        case 'pickup':
-          if (args.length < 1) {
-            throw new Error("Pickup action requires an item ID.");
-          }
-          gameAction = { type: 'pickup', playerId: 'user', details: { itemId: args.join(' ') } };
-          break;
-        case 'drop':
-          if (args.length < 1) {
-            throw new Error("Drop action requires an item ID.");
-          }
-          gameAction = { type: 'drop', playerId: 'user', details: { itemId: args.join(' ') } };
-          break;
-        case 'examine':
-          if (args.length < 1) {
-            throw new Error("Examine action requires a target ID.");
-          }
-          gameAction = { type: 'examine', playerId: 'user', details: { targetId: args.join(' ') } };
-          break;
-        default:
-          gameAction = { type: 'chat', playerId: 'user', details: { message: userInput } };
-      }
-
-      handleUserAction(gameAction);
-      setUserInput('');
-    } catch (error) {
-      if (error instanceof Error) {
-        toast({
-          title: "Invalid Action",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
+  const handleActionSubmit = () => {
+    if (selectedAction && actionDetails) {
+      const action: GameAction = {
+        type: selectedAction,
+        playerId: 'user',
+        details: actionDetails
+      };
+      handleUserAction(action);
+      setSelectedAction(null);
+      setActionDetails(null);
     }
-  }, [userInput, gameState, handleUserAction, toast]);
+  };
+
+  const handleChatSubmit = () => {
+    if (chatInput.trim()) {
+      const chatAction: GameAction = {
+        type: 'chat',
+        playerId: 'user',
+        details: { message: chatInput.trim() }
+      };
+      handleUserAction(chatAction);
+      setChatInput('');
+    }
+  };
+
+  const renderActionDetails = () => {
+    if (!gameState) return null;
+
+    const userPlayer = gameState.players.find(p => p.role === 'user') as Player;
+    const currentRoom = gameState.mansion.rooms.find(r => r.id === gameState.mansion.layout[userPlayer.position.y][userPlayer.position.x]);
+
+    switch (selectedAction) {
+      case 'move':
+        return (
+          <Select onValueChange={(value) => setActionDetails({ direction: value })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select direction" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="north">North</SelectItem>
+              <SelectItem value="south">South</SelectItem>
+              <SelectItem value="east">East</SelectItem>
+              <SelectItem value="west">West</SelectItem>
+            </SelectContent>
+          </Select>
+        );
+      case 'search':
+        return <Button onClick={() => setActionDetails({ roomId: currentRoom?.id })}>Search Room</Button>;
+      case 'examine':
+        return (
+          <Select onValueChange={(value) => setActionDetails({ targetId: value })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select item to examine" />
+            </SelectTrigger>
+            <SelectContent>
+              {currentRoom?.items.map(item => (
+                <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      case 'pickup':
+        return (
+          <Select onValueChange={(value) => setActionDetails({ itemId: value })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select item to pick up" />
+            </SelectTrigger>
+            <SelectContent>
+              {currentRoom?.items.filter(item => item.canPickUp).map(item => (
+                <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      case 'drop':
+        return (
+          <Select onValueChange={(value) => setActionDetails({ itemId: value })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select item to drop" />
+            </SelectTrigger>
+            <SelectContent>
+              {userPlayer.inventory.map(item => (
+                <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      case 'use_item':
+        return (
+          <Select onValueChange={(value) => setActionDetails({ itemId: value })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select item to use" />
+            </SelectTrigger>
+            <SelectContent>
+              {userPlayer.inventory.filter(item => item.useAction).map(item => (
+                <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      case 'accuse':
+        return (
+          <>
+            <Select onValueChange={(value) => setActionDetails((prev: any) => ({ ...prev, suspectId: value }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select suspect" />
+              </SelectTrigger>
+              <SelectContent>
+                {gameState.players.filter(p => p.role !== 'user').map(player => (
+                  <SelectItem key={player.id} value={player.id}>{player.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select onValueChange={(value) => setActionDetails((prev: any) => ({ ...prev, weaponId: value }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select weapon" />
+              </SelectTrigger>
+              <SelectContent>
+                {/* Populate with available weapons */}
+              </SelectContent>
+            </Select>
+            <Select onValueChange={(value) => setActionDetails((prev: any) => ({ ...prev, locationId: value }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select location" />
+              </SelectTrigger>
+              <SelectContent>
+                {gameState.mansion.rooms.map(room => (
+                  <SelectItem key={room.id} value={room.id}>{room.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        );
+      default:
+        return null;
+    }
+  };
 
   const renderGameGrid = useCallback(() => {
     if (!gameState || !gameState.mansion || !gameState.mansion.layout) return null;
@@ -203,8 +317,7 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
                   src={roomSvgs[room.name] || '/rooms/default.svg'}
                   alt={room.name}
                   width={CELL_SIZE}
-                    height={CELL_SIZE}
-                  // fill={true} 
+                  height={CELL_SIZE}
                   style={{ objectFit: "cover" }}
                 />
               )}
@@ -216,16 +329,45 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
                     width={CELL_SIZE * 0.8}
                     height={CELL_SIZE * 0.8}
                     style={{ objectFit: "cover" }}
-
                   />
-                </div>
-              )}
+                </div>)}
             </div>
           );
         })}
       </div>
     );
   }, [gameState]);
+
+  const renderGameInstructions = () => (
+    <Accordion type="single" collapsible className="mb-4">
+      <AccordionItem value="instructions">
+        <AccordionTrigger>How to Play</AccordionTrigger>
+        <AccordionContent>
+          <ol className="list-decimal pl-5">
+            <li>Use the chat to communicate with other characters and gather information.</li>
+            <li>Select specific actions from the "Actions" tab to interact with the environment.</li>
+            <li>Move around the mansion, search for clues, and examine objects.</li>
+            <li>Use the items you find and keep track of the information you gather.</li>
+            <li>Make an accusation when you think you've solved the mystery.</li>
+          </ol>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+
+  const renderChatLog = () => (
+    <ScrollArea className={`${styles.gameLog} h-[300px]`}>
+      {gameState?.events.map((event, index) => (
+        <div key={index} className={`${styles.logEntry} flex items-start mb-2`}>
+          <Avatar className="w-8 h-8 mr-2">
+            <AvatarImage src={event.startsWith('Game Master:') ? '/svgs/game-master.svg' : '/svgs/user.svg'} />
+            <AvatarFallback>{event.startsWith('Game Master:') ? 'GM' : 'U'}</AvatarFallback>
+          </Avatar>
+          <div className={`${styles.logMessage} flex-1`}>{event}</div>
+        </div>
+      ))}
+    </ScrollArea>
+  );
 
   if (isLoading) {
     return <div>Loading game...</div>;
@@ -241,27 +383,54 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
         <CardTitle className={styles.gameTitle}>Murder Mystery in the Haunted Mansion</CardTitle>
       </CardHeader>
       <CardContent>
+        {renderGameInstructions()}
         {renderGameGrid()}
         <div className={styles.gameInfo}>
           <p>Current Turn: {gameState.currentTurn}</p>
           <p>Game Phase: {gameState.gamePhase}</p>
           <p>Turn Count: {gameState.turnCount}</p>
         </div>
-        <ScrollArea className={styles.gameLog}>
-          {gameState.events.map((event, index) => (
-            <div key={index} className={styles.logEntry}>{event}</div>
-          ))}
-        </ScrollArea>
-        <div className={styles.actionInput}>
-          <Input
-            type="text"
-            value={userInput}
-            onChange={(e) => setUserInput(e.target.value)}
-            placeholder="Enter your action..."
-            onKeyPress={(e) => e.key === 'Enter' && handleInputSubmit()}
-          />
-          <Button onClick={handleInputSubmit}>Submit Action</Button>
-        </div>
+        {renderChatLog()}
+        <Tabs defaultValue="chat" className="w-full">
+          <TabsList>
+            <TabsTrigger value="chat">Chat</TabsTrigger>
+            <TabsTrigger value="actions">Actions</TabsTrigger>
+          </TabsList>
+          <TabsContent value="chat">
+            <div className={styles.chatInput}>
+              <Input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type your message..."
+                onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
+              />
+              <Button onClick={handleChatSubmit}>Send</Button>
+            </div>
+          </TabsContent>
+          <TabsContent value="actions">
+            <div className={styles.actionInput}>
+              <Select onValueChange={handleActionSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an action" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="move">Move</SelectItem>
+                  <SelectItem value="search">Search</SelectItem>
+                  <SelectItem value="examine">Examine</SelectItem>
+                  <SelectItem value="pickup">Pick Up</SelectItem>
+                  <SelectItem value="drop">Drop</SelectItem>
+                  <SelectItem value="use_item">Use Item</SelectItem>
+                  <SelectItem value="accuse">Accuse</SelectItem>
+                </SelectContent>
+              </Select>
+              {selectedAction && renderActionDetails()}
+              <Button onClick={handleActionSubmit} disabled={!selectedAction || !actionDetails}>
+                Submit Action
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

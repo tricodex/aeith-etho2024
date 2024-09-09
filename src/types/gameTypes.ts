@@ -10,6 +10,8 @@ export interface Position {
     items: Item[];
     connections: string[]; // IDs of connected rooms
     discovered: boolean;    
+    clues?: string[];
+
   }
   
   export interface Item {
@@ -18,6 +20,7 @@ export interface Position {
     description: string;
     isClue: boolean;
     canPickUp: boolean;
+    useAction?: string;
   }
   
   export interface Player {
@@ -44,7 +47,7 @@ export interface Position {
     };
     players: Player[];
     currentTurn: string; // Player ID
-    gamePhase: 'setup' | 'investigation' | 'accusation' | 'conclusion';
+    gamePhase: 'setup' | 'investigation' | 'middleGame' | 'finalPhase' | 'accusation' | 'conclusion';
     turnCount: number;
     clues: Clue[];
     events: string[];
@@ -55,6 +58,20 @@ export interface Position {
       culprit: string;
       motive: string;
     };
+  }
+
+  export interface ChatEntry {
+    role: string;
+    content: string;
+    agentId?: string;
+  }
+
+  export interface Item {
+    id: string;
+    name: string;
+    description: string;
+    isClue: boolean;
+    canPickUp: boolean;
   }
   
   export type ActionType = 'move' | 'search' | 'accuse' | 'use_item' | 'chat' | 'pickup' | 'drop' | 'examine';

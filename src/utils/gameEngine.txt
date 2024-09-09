@@ -2,6 +2,7 @@
 // src/utils/gameEngine.ts
 
 import { GameState, GameAction, Position, Player, Room, Clue } from '../types/gameTypes';
+import GameAgentsGrab from '@/utils/GameAgentsGrab';
 
 // Player characters
 const CHARACTERS = ['blue-fish', 'orange-crab', 'green-turtle', 'red-donkey', 'user'];
@@ -12,29 +13,37 @@ const ROOM_NAMES = [
   'Study', 'Master Bedroom', 'Guest Bedroom', 'Bathroom', 'Attic'
 ];
 
-export class GameEngine {
-  private state: GameState;
-
-
-  constructor() {
-    this.state = {} as GameState;
+interface ChatEntry {
+    role: string;
+    content: string;
+    agentId?: string;
   }
+  
 
-  public async initializeGame(): Promise<void> {
-    try {
-      const response = await fetch('/api/game-master/initialize', {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        throw new Error('Failed to initialize game');
-      }
-      const initialState = await response.json();
-      this.state = this.validateAndFillGameState(initialState, this.createDefaultGameState());
-    } catch (error) {
-      console.error('Error initializing game:', error);
-      this.state = this.createDefaultGameState();
+  export class GameEngine {
+    private state: GameState;
+    private gameAgentsGrab: GameAgentsGrab;
+    private chatHistory: ChatEntry[];
+  
+    constructor() {
+      this.state = {} as GameState;
+      this.gameAgentsGrab = new GameAgentsGrab();
+      this.chatHistory = [];
     }
-  }
+  
+    public async initializeGame(): Promise<void> {
+      try {
+        const response = await fetch('/api/game-master/initialize', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to initialize game');
+        const initialState = await response.json();
+        this.state = this.validateAndFillGameState(initialState, this.createDefaultGameState());
+        this.addToChatHistory('game_master', 'The game has been initialized. Welcome to the Haunted Mansion!');
+      } catch (error) {
+        console.error('Error initializing game:', error);
+        this.state = this.createDefaultGameState();
+      }
+    }
+  
   
   private validateAndFillGameState(state: Partial<GameState>, defaultState: GameState): GameState {
     return {
@@ -187,71 +196,128 @@ export class GameEngine {
     return this.state;
   }
 
+  public getChatHistory(): ChatEntry[] {
+    return this.chatHistory;
+  }
+
   public async processAction(action: GameAction): Promise<GameState> {
     try {
+      // Process action through the game master API
       const response = await fetch('/api/game-master/process-action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerName: action.playerId, action, gameState: this.state }),
       });
-  
-      if (!response.ok) {
-        throw new Error('Failed to process action');
-      }
-  
+      if (!response.ok) throw new Error('Failed to process action');
       const result = await response.json();
+
+      // Update game state and chat history
       this.updateGameState(result);
-  
+      this.addToChatHistory('user', `${action.playerId} performed action: ${action.type}`);
+      this.addToChatHistory('game_master', result.narrativeDescription || 'The action was processed.');
+
+      // Process AI turns if it was a user action
       if (this.state.players.find(p => p.id === action.playerId)?.role === 'user') {
         await this.processAITurns();
       }
-  
+
       return this.state;
     } catch (error) {
       console.error('Error processing action:', error);
       return this.handleActionLocally(action);
     }
   }
-  
+
+  private async processAITurns(): Promise<void> {
+    for (const player of this.state.players) {
+      if (player.role === 'ai' && player.id === this.state.currentTurn) {
+        const aiAction = await this.generateAIAction(player);
+        await this.processAction(aiAction);
+      }
+    }
+  }
+
+  private async generateAIAction(player: Player): Promise<GameAction> {
+    try {
+      // Create a new chat for the AI agent
+      const chatId = await this.gameAgentsGrab.createAgent(player.id, this.getFullGameContext(), 5);
+      
+      // Get the AI's response
+      const aiResponse = await this.gameAgentsGrab.getAgentMessages(player.id, chatId);
+      const lastMessage = aiResponse[aiResponse.length - 1];
+      
+      // Add AI's response to chat history
+      this.addToChatHistory('ai', lastMessage.content[0], player.id);
+      
+      // Parse and return the AI's action
+      return this.parseAIResponse(lastMessage.content[0], player.id);
+    } catch (error) {
+      console.error('Error generating AI action:', error);
+      return this.generateRandomAction(player);
+    }
+  }
+
+  private parseAIResponse(response: string, playerId: string): GameAction {
+    try {
+      const parsed = JSON.parse(response);
+      return {
+        type: parsed.actionType,
+        playerId,
+        details: parsed.actionDetails
+      };
+    } catch (error) {
+      console.error('Error parsing AI response:', error);
+      return this.generateRandomAction({ id: playerId } as Player);
+    }
+  }
+
+  private getFullGameContext(): string {
+    return JSON.stringify({
+      gameState: this.state,
+      chatHistory: this.chatHistory
+    });
+  }
+
+  private addToChatHistory(role: string, content: string, agentId?: string): void {
+    this.chatHistory.push({ role, content, agentId });
+    // Limit chat history to last 50 entries
+    if (this.chatHistory.length > 50) {
+      this.chatHistory = this.chatHistory.slice(-50);
+    }
+  }
+
   private updateGameState(result: any): void {
     if (result.stateChanges) {
       const { playerPosition, roomDiscovered, itemFound, clueRevealed } = result.stateChanges;
       
+      // Update player position
       if (playerPosition) {
         const player = this.state.players.find(p => p.id === this.state.currentTurn);
-        if (player) {
-          player.position = playerPosition;
-        }
+        if (player) player.position = playerPosition;
       }
   
+      // Mark room as discovered
       if (roomDiscovered) {
         const room = this.state.mansion.rooms.find(r => r.id === roomDiscovered);
-        if (room) {
-          room.discovered = true;
-        }
+        if (room) room.discovered = true;
       }
   
+      // Add found item to the room
       if (itemFound) {
         const room = this.getRoomAtPosition(this.state.players.find(p => p.id === this.state.currentTurn)!.position);
         room.items.push(itemFound);
       }
   
+      // Mark clue as discovered
       if (clueRevealed) {
         const clue = this.state.clues.find(c => c.id === clueRevealed);
-        if (clue) {
-          clue.discovered = true;
-        }
+        if (clue) clue.discovered = true;
       }
     }
   
-    if (result.narrativeDescription) {
-      this.state.events.push(result.narrativeDescription);
-    }
-  
-    // Ensure turn advancement even if the API doesn't provide it
+    // Advance turn
     this.advanceTurn();
   }
-
   private handleActionLocally(action: GameAction): GameState {
     const player = this.state.players.find(p => p.id === action.playerId);
     if (!player) return this.state;
@@ -397,14 +463,14 @@ export class GameEngine {
     return this.state;
   }
 
-  private async processAITurns(): Promise<void> {
-    for (const player of this.state.players) {
-      if (player.role === 'ai' && player.id === this.state.currentTurn) {
-        const aiAction = await this.generateAIAction(player);
-        await this.processAction(aiAction);
-      }
-    }
-  }
+//   private async processAITurns(): Promise<void> {
+//     for (const player of this.state.players) {
+//       if (player.role === 'ai' && player.id === this.state.currentTurn) {
+//         const aiAction = await this.generateAIAction(player);
+//         await this.processAction(aiAction);
+//       }
+//     }
+//   }
 
 //   private async generateAIAction(player: Player): Promise<GameAction> {
 //     try {
@@ -441,25 +507,25 @@ export class GameEngine {
 //         return { type: 'chat', playerId, details: { message: event.description } };
 //     }
 //   }
-private async generateAIAction(player: Player): Promise<GameAction> {
-    try {
-      const response = await fetch('/api/game-master/generate-event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gameState: this.state, player: player.id }),
-      });
+// private async generateAIAction(player: Player): Promise<GameAction> {
+//     try {
+//       const response = await fetch('/api/game-master/generate-event', {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({ gameState: this.state, player: player.id }),
+//       });
   
-      if (!response.ok) {
-        throw new Error('Failed to generate AI action');
-      }
+//       if (!response.ok) {
+//         throw new Error('Failed to generate AI action');
+//       }
   
-      const event = await response.json();
-      return this.eventToGameAction(event, player.id);
-    } catch (error) {
-      console.error('Error generating AI action:', error);
-      return this.generateRandomAction(player);
-    }
-  }
+//       const event = await response.json();
+//       return this.eventToGameAction(event, player.id);
+//     } catch (error) {
+//       console.error('Error generating AI action:', error);
+//       return this.generateRandomAction(player);
+//     }
+//   }
   
   private eventToGameAction(event: any, playerId: string): GameAction {
     if (!event || typeof event !== 'object') {
@@ -477,24 +543,24 @@ private async generateAIAction(player: Player): Promise<GameAction> {
         return { type: 'chat', playerId, details: { message: event.description || 'I am looking around.' } };
     }
   }
-  private generateRandomAction(player: Player): GameAction {
-    const actions: GameAction['type'][] = ['move', 'search', 'chat', 'examine'];
-    const randomAction = actions[Math.floor(Math.random() * actions.length)];
+//   private generateRandomAction(player: Player): GameAction {
+//     const actions: GameAction['type'][] = ['move', 'search', 'chat', 'examine'];
+//     const randomAction = actions[Math.floor(Math.random() * actions.length)];
 
-    switch (randomAction) {
-      case 'move':
-        return { type: 'move', playerId: player.id, details: { dx: Math.random() < 0.5 ? -1 : 1, dy: Math.random() < 0.5 ? -1 : 1 } };
-      case 'search':
-        return { type: 'search', playerId: player.id, details: {} };
-      case 'chat':
-        return { type: 'chat', playerId: player.id, details: { message: 'I am looking for clues.' } };
-      case 'examine':
-        return { type: 'examine', playerId: player.id, details: { targetId: 'randomTarget' } };
+//     switch (randomAction) {
+//       case 'move':
+//         return { type: 'move', playerId: player.id, details: { dx: Math.random() < 0.5 ? -1 : 1, dy: Math.random() < 0.5 ? -1 : 1 } };
+//       case 'search':
+//         return { type: 'search', playerId: player.id, details: {} };
+//       case 'chat':
+//         return { type: 'chat', playerId: player.id, details: { message: 'I am looking for clues.' } };
+//       case 'examine':
+//         return { type: 'examine', playerId: player.id, details: { targetId: 'randomTarget' } };
 
-default:
-    return { type: 'chat', playerId: player.id, details: { message: 'I am looking for clues.' } };
-}
-}
+// default:
+//     return { type: 'chat', playerId: player.id, details: { message: 'I am looking for clues.' } };
+// }
+// }
 
 // private async updateGameState(actionResult: any): Promise<void> {
 //   try {
@@ -553,64 +619,102 @@ private applyActionResult(actionResult: any): void {
   }
 }
 
-public async provideClue(player: Player): Promise<void> {
-  try {
-    const response = await fetch('/api/game-master/provide-clue', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        player: player.id,
-        location: this.getRoomAtPosition(player.position).id,
-        gameProgress: this.state.turnCount / 10 // Simple progress metric
-      }),
-    });
+// private advanceTurn(): void {
+//     const currentPlayerIndex = this.state.players.findIndex(p => p.id === this.state.currentTurn);
+//     const nextPlayerIndex = (currentPlayerIndex + 1) % this.state.players.length;
+//     this.state.currentTurn = this.state.players[nextPlayerIndex].id;
+//     this.state.turnCount++;
+//   }
 
-    if (!response.ok) {
-      throw new Error('Failed to provide clue');
+  private generateRandomAction(player: Player): GameAction {
+    const actions: GameAction['type'][] = ['move', 'search', 'chat', 'examine'];
+    const randomAction = actions[Math.floor(Math.random() * actions.length)];
+
+    switch (randomAction) {
+      case 'move':
+        return { 
+          type: 'move', 
+          playerId: player.id, 
+          details: { dx: Math.random() < 0.5 ? -1 : 1, dy: Math.random() < 0.5 ? -1 : 1 } 
+        };
+      case 'search':
+        return { type: 'search', playerId: player.id, details: {} };
+      case 'chat':
+        return { 
+          type: 'chat', 
+          playerId: player.id, 
+          details: { message: 'I am looking for clues.' } 
+        };
+      case 'examine':
+        return { 
+          type: 'examine', 
+          playerId: player.id, 
+          details: { targetId: 'randomTarget' } 
+        };
+      default:
+        return { 
+          type: 'chat', 
+          playerId: player.id, 
+          details: { message: 'I am looking around.' } 
+        };
     }
-
-    const clue = await response.json();
-    this.addClueToGame(clue, player);
-  } catch (error) {
-    console.error('Error providing clue:', error);
-    // Fallback to local clue generation
-    this.generateLocalClue(player);
   }
-}
 
-private addClueToGame(clue: any, player: Player): void {
-  const newClue: Clue = {
-    id: `clue${this.state.clues.length + 1}`,
-    description: clue.description,
-    location: this.getRoomAtPosition(player.position).id,
-    discovered: true,
-    relatedTo: clue.clueType as 'weapon' | 'culprit' | 'motive' | 'alibi'
-  };
+  public async provideClue(player: Player): Promise<void> {
+    try {
+      const response = await fetch('/api/game-master/provide-clue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          player: player.id,
+          location: this.getRoomAtPosition(player.position).id,
+          gameProgress: this.state.turnCount / 10 // Simple progress metric
+        }),
+      });
 
-  this.state.clues.push(newClue);
-  player.knownClues.push(newClue.id);
-  this.state.events.push(`${player.name} found a new clue: ${newClue.description}`);
-}
+      if (!response.ok) throw new Error('Failed to provide clue');
 
-private generateLocalClue(player: Player): void {
-  const clueTypes = ['weapon', 'culprit', 'motive', 'alibi'];
-  const randomType = clueTypes[Math.floor(Math.random() * clueTypes.length)] as 'weapon' | 'culprit' | 'motive' | 'alibi';
-  const newClue: Clue = {
-    id: `clue${this.state.clues.length + 1}`,
-    description: `A mysterious ${randomType} clue`,
-    location: this.getRoomAtPosition(player.position).id,
-    discovered: true,
-    relatedTo: randomType
-  };
+      const clue = await response.json();
+      this.addClueToGame(clue, player);
+    } catch (error) {
+      console.error('Error providing clue:', error);
+      this.generateLocalClue(player);
+    }
+  }
 
-  this.state.clues.push(newClue);
-  player.knownClues.push(newClue.id);
-  this.state.events.push(`${player.name} found a new clue: ${newClue.description}`);
-}
+  private addClueToGame(clue: any, player: Player): void {
+    const newClue: Clue = {
+      id: `clue${this.state.clues.length + 1}`,
+      description: clue.description,
+      location: this.getRoomAtPosition(player.position).id,
+      discovered: true,
+      relatedTo: clue.clueType as 'weapon' | 'culprit' | 'motive' | 'alibi'
+    };
 
-public isGameOver(): boolean {
-  return this.state.gamePhase === 'conclusion';
-}
+    this.state.clues.push(newClue);
+    player.knownClues.push(newClue.id);
+    this.addToChatHistory('game_master', `${player.name} found a new clue: ${newClue.description}`);
+  }
+
+  private generateLocalClue(player: Player): void {
+    const clueTypes = ['weapon', 'culprit', 'motive', 'alibi'];
+    const randomType = clueTypes[Math.floor(Math.random() * clueTypes.length)] as 'weapon' | 'culprit' | 'motive' | 'alibi';
+    const newClue: Clue = {
+      id: `clue${this.state.clues.length + 1}`,
+      description: `A mysterious ${randomType} clue`,
+      location: this.getRoomAtPosition(player.position).id,
+      discovered: true,
+      relatedTo: randomType
+    };
+
+    this.state.clues.push(newClue);
+    player.knownClues.push(newClue.id);
+    this.addToChatHistory('game_master', `${player.name} found a new clue: ${newClue.description}`);
+  }
+
+  public isGameOver(): boolean {
+    return this.state.gamePhase === 'conclusion';
+  }
 }
 
 export const gameEngine = new GameEngine();

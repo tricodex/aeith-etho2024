@@ -1,2 +1,8 @@
-<?xml version="1.0" encoding="utf-8" ?>
-<svg baseProfile="tiny" height="200px" version="1.2" width="200px" xmlns="http://www.w3.org/2000/svg" xmlns:ev="http://www.w3.org/2001/xml-events" xmlns:xlink="http://www.w3.org/1999/xlink"><defs /><rect fill="lightgrey" height="100%" width="100%" x="0" y="0" /><text fill="black" font-family="Arial" font-size="20px" x="10" y="20">Library</text></svg>
+<svg baseProfile="tiny" height="200px" version="1.2" width="200px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <defs />
+    <rect fill="lightgrey" height="100%" width="100%" x="0" y="0" />
+    <text fill="black" font-family="Arial" font-size="20px" x="10" y="20">Library</text>
+    <rect x="70" y="100" width="60" height="80" fill="saddlebrown" />
+    <line x1="70" y1="100" x2="130" y2="100" stroke="black" stroke-width="2" />
+    <line x1="70" y1="110" x2="130" y2="110" stroke="black" stroke-width="2" />
+</svg>

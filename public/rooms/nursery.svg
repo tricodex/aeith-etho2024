@@ -1,0 +1,7 @@
+<svg baseProfile="tiny" height="200px" version="1.2" width="200px" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <defs />
+    <rect fill="lightpink" height="100%" width="100%" x="0" y="0" />
+    <text fill="darkred" font-family="Arial" font-size="20px" x="10" y="20">Nursery</text>
+    <rect x="50" y="130" width="100" height="40" fill="lightyellow" />
+    <line x1="50" y1="130" x2="150" y2="130" stroke="brown" stroke-width="2" />
+</svg>

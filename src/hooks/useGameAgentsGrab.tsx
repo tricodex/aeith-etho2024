@@ -1,11 +1,10 @@
 // src/hooks/useAgentGrab.ts
-
 import { useState, useEffect, useCallback } from 'react';
 import GameAgentsGrab from '@/utils/GameAgentsGrab';
 
 interface Message {
   role: string;
-  content: string[];
+  content: { contentType: string; value: string; }[];
 }
 
 export const useGameAgentsGrab = () => {
@@ -34,17 +33,17 @@ export const useGameAgentsGrab = () => {
     }
   }, [gameAgentsGrab]);
 
-  const getAgentMessages = useCallback(async (agentType: string, chatId: number) => {
+  const getAgentMessages = useCallback(async (agentType: string, chatId?: number) => {
     if (!gameAgentsGrab) throw new Error("GameAgentsGrab not initialized");
     return await gameAgentsGrab.getAgentMessages(agentType, chatId);
   }, [gameAgentsGrab]);
 
-  const addMessage = useCallback(async (agentType: string, message: string, chatId: number) => {
+  const addMessage = useCallback(async (agentType: string, message: string, chatId?: number) => {
     if (!gameAgentsGrab) throw new Error("GameAgentsGrab not initialized");
     await gameAgentsGrab.addMessage(agentType, message, chatId);
   }, [gameAgentsGrab]);
 
-  const monitorChat = useCallback((agentType: string, chatId: number, callback: (messages: Message[]) => void) => {
+  const monitorChat = useCallback((agentType: string, chatId: number | undefined, callback: (messages: Message[]) => void) => {
     if (!gameAgentsGrab) throw new Error("GameAgentsGrab not initialized");
     return gameAgentsGrab.monitorChat(agentType, chatId, callback);
   }, [gameAgentsGrab]);

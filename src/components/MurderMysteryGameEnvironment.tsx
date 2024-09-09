@@ -1,28 +1,77 @@
 // src/components/MurderMysteryGameEnvironment.tsx
-
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import MurderMysteryGame from './MurderMysteryGame';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { gameEngine } from '@/utils/game-engine/gameEngine';
+import { GameState, ChatEntry } from '@/types/gameTypes';
+import { messageBus } from '@/utils/MessageBus';
 import styles from '@/styles/MurderMystery.module.css';
 
 const MurderMysteryGameEnvironment: React.FC = () => {
   const [currentRoom, setCurrentRoom] = useState<string>('Entrance Hall');
-  const [gameStarted, setGameStarted] = useState<boolean>(false);
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const { toast } = useToast();
 
   const handleRoomChange = useCallback((newRoom: string) => {
     setCurrentRoom(newRoom);
   }, []);
 
-  const startGame = () => {
-    setGameStarted(true);
-  };
+  const initializeGame = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await gameEngine.initializeGame();
+      const initialState = gameEngine.getState();
+      setGameState(initialState);
+      toast({
+        title: "Game Initialized",
+        description: "Welcome to the Haunted Mansion! The mystery awaits...",
+      });
+    } catch (error) {
+      console.error('Failed to initialize game:', error);
+      toast({
+        title: "Error",
+        description: "Failed to initialize game. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    const handleGameUpdate = (message: ChatEntry, updatedState: GameState) => {
+      setGameState(updatedState);
+    };
+
+    messageBus.subscribe('game_environment', handleGameUpdate);
+
+    return () => {
+      messageBus.unsubscribe('game_environment', handleGameUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (gameState) {
+      const userPlayer = gameState.players.find(p => p.role === 'user');
+      if (userPlayer) {
+        const currentRoom = gameState.mansion.rooms.find(r =>
+          r.id === gameState.mansion.layout[userPlayer.position.y]?.[userPlayer.position.x]
+        );
+        if (currentRoom) {
+          setCurrentRoom(currentRoom.name);
+        }
+      }
+    }
+  }, [gameState]);
 
   return (
     <div className={styles.gameEnvironmentContainer}>
-      {!gameStarted ? (
+      {!gameState ? (
         <Card className={styles.initializationContainer}>
           <CardHeader>
             <CardTitle className={styles.gameTitle}>Murder Mystery in the Haunted Mansion</CardTitle>
@@ -33,10 +82,11 @@ const MurderMysteryGameEnvironment: React.FC = () => {
               uncover the truth, or will the culprit remain hidden?
             </p>
             <Button
-              onClick={startGame}
+              onClick={initializeGame}
               className={styles.startButton}
+              disabled={isLoading}
             >
-              Start Game
+              {isLoading ? 'Initializing...' : 'Start Game'}
             </Button>
           </CardContent>
         </Card>
