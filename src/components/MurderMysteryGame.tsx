@@ -127,23 +127,60 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     }
   }, [gameState, onRoomChange]);
 
+  // const handleUserAction = useCallback(async (action: GameAction) => {
+  //   if (!gameState) return;
+
+  //   try {
+  //     const updatedState = await gameEngine.processAction(action);
+  //     setGameState(updatedState);
+
+  //     messageBus.publish({
+  //       role: 'user',
+  //       content: JSON.stringify(action),
+  //       agentId: 'user',
+  //     });
+
+  //     if (gameEngine.isGameOver()) {
+  //       toast({
+  //         title: "Game Over",
+  //         description: "The mystery has been solved!",
+  //       });
+  //     }
+  //   } catch (error) {
+  //     console.error('Error processing action:', error);
+  //     toast({
+  //       title: "Error",
+  //       description: "Failed to process action. Please try again.",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // }, [gameState, toast]);
+
   const handleUserAction = useCallback(async (action: GameAction) => {
     if (!gameState) return;
-
+  
     try {
-      const updatedState = await gameEngine.processAction(action);
-      setGameState(updatedState);
-
-      messageBus.publish({
-        role: 'user',
-        content: JSON.stringify(action),
-        agentId: 'user',
-      });
-
-      if (gameEngine.isGameOver()) {
+      if (gameState.currentTurn === 'user') {
+        const updatedState = await gameEngine.processAction(action);
+        setGameState(updatedState);
+  
+        messageBus.publish({
+          role: 'user',
+          content: JSON.stringify(action),
+          agentId: 'user',
+        });
+  
+        if (gameEngine.isGameOver()) {
+          toast({
+            title: "Game Over",
+            description: "The mystery has been solved!",
+          });
+        }
+      } else {
         toast({
-          title: "Game Over",
-          description: "The mystery has been solved!",
+          title: "Not Your Turn",
+          description: "Please wait for your turn to take an action.",
+          variant: "destructive",
         });
       }
     } catch (error) {

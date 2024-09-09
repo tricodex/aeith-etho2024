@@ -42,7 +42,7 @@ class GameAgentsGrab {
 
   private async ensureAgentInitialized(agentType: string, message?: string): Promise<void> {
     if (!this.initialized[agentType]) {
-      await this.createAgent(agentType, message || 'Initialize agent', 5);
+      await this.createAgent(agentType, message || 'Initialize agent', 2);
     }
   }
 
@@ -102,15 +102,11 @@ class GameAgentsGrab {
   }
 
   async addMessage(agentType: string, message: string, chatId?: number): Promise<void> {
-    await this.ensureAgentInitialized(agentType, message);
+    if (!this.contracts[agentType]) throw new Error(`Invalid agent type: ${agentType}`);
+    
     try {
-      const contract = this.contracts[agentType];
-      if (!contract) {
-        throw new Error(`Invalid agent type: ${agentType}`);
-      }
-
       const actualChatId = chatId || this.chatIds[agentType];
-      const tx = await contract.addMessage(message, actualChatId);
+      const tx = await this.contracts[agentType].addMessage(message, actualChatId);
       await tx.wait();
 
       messageBus.publish({
@@ -120,7 +116,11 @@ class GameAgentsGrab {
       });
     } catch (err) {
       console.error(`Error adding message to ${agentType} agent:`, err);
-      throw err;
+      messageBus.publish({
+        role: 'system',
+        content: `Failed to communicate with ${agentType} agent. The game will continue without this agent's input.`,
+        agentId: 'system',
+      });
     }
   }
 

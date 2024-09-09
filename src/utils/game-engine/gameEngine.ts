@@ -1,16 +1,46 @@
-// src/utils/game-engine/gameEngine.ts
-
-import { GameState, GameAction, Player, ChatEntry, Room, Clue, Item } from '@/types/gameTypes';
+import { GameState, GameAction, Player, ChatEntry, Clue, Item, Position, ActionType } from '@/types/gameTypes';
 import GameAgentsGrab from '../GameAgentsGrab';
 import { createDefaultGameState, initializeGame } from './gameInitialization';
 import { processAction, processAITurns, provideClue } from './gameActions';
 import { addToChatHistory, isGameOver, updateGamePhase, getRoomAtPosition, movePlayer, validateAccusation } from './gameHelpers';
 import { messageBus } from '../MessageBus';
 
+const actionTypeMap: { [key: string]: ActionType } = {
+  move: 'move',
+  search: 'search',
+  examine: 'examine',
+  accuse: 'accuse',
+  chat: 'chat',
+  use: 'use_item',
+  pickup: 'pickup',
+  drop: 'drop',
+};
+
+function normalizeText(text: string): string {
+  return text.toLowerCase().trim();
+}
+
+function fuzzyMatch(input: string, target: string): boolean {
+  const normalizedInput = normalizeText(input);
+  const normalizedTarget = normalizeText(target);
+  return normalizedInput.includes(normalizedTarget) || normalizedTarget.includes(normalizedInput);
+}
+
+function findBestMatchingActionType(input: string): ActionType {
+  for (const [key, value] of Object.entries(actionTypeMap)) {
+    if (fuzzyMatch(input, key)) {
+      return value;
+    }
+  }
+  return 'chat'; // Default to chat if no match is found
+}
+
 export class GameEngine {
   private state: GameState;
   private gameAgentsGrab: GameAgentsGrab;
   private chatHistory: ChatEntry[];
+  private turnQueue: string[] = [];
+  private processingTurn: boolean = false;
 
   constructor() {
     this.state = createDefaultGameState();
@@ -45,17 +75,48 @@ export class GameEngine {
       const updatedState = await processAction(this.state, action, this.gameAgentsGrab, this.addToChatHistory.bind(this));
       this.state = updatedState;
       messageBus.updateGameState(this.state);
-  
-      if (this.state.currentTurn !== 'user') {
-        await this.processAITurns();
-      }
-  
+
+      this.state.currentTurn = this.getNextTurn();
+      this.turnQueue.push(this.state.currentTurn);
+      this.processTurnQueue();
+
       return this.state;
     } catch (error) {
       console.error('Error processing action:', error);
       this.addToChatHistory('game_master', `Error: ${(error as Error).message}`);
       return this.state;
     }
+  }
+
+  private async processTurnQueue() {
+    if (this.processingTurn || this.turnQueue.length === 0) return;
+
+    this.processingTurn = true;
+    const playerId = this.turnQueue.shift();
+
+    if (playerId) {
+      if (playerId === 'user') {
+        // Wait for user input
+        this.processingTurn = false;
+      } else {
+        await this.processAITurn(playerId);
+        this.processingTurn = false;
+        setTimeout(() => this.processTurnQueue(), 5000); // 5-second delay between AI turns
+      }
+    } else {
+      this.processingTurn = false;
+    }
+  }
+
+  private async processAITurn(playerId: string) {
+    const aiAction = await this.gameAgentsGrab.generateAgentAction(playerId, this.state);
+    await this.processAction(aiAction);
+  }
+
+  private getNextTurn(): string {
+    const currentIndex = this.state.players.findIndex(p => p.id === this.state.currentTurn);
+    const nextIndex = (currentIndex + 1) % this.state.players.length;
+    return this.state.players[nextIndex].id;
   }
 
   public async provideClue(player: Player): Promise<Clue | null> {
@@ -72,37 +133,62 @@ export class GameEngine {
   }
 
   private async handleMessage(message: ChatEntry, gameState: GameState) {
-    if (message.role === 'user') {
-      const action = this.parseUserMessage(message.content);
-      await this.processAction(action);
-    } else if (message.role === 'game_master') {
-      this.handleGameMasterMessage(message);
+    try {
+      if (message.role === 'user') {
+        const action = this.parseUserMessage(message.content);
+        await this.processAction(action);
+      } else if (message.role === 'game_master') {
+        this.handleGameMasterMessage(message);
+      }
+    } catch (error) {
+      console.error('Error handling message:', error);
+      this.addToChatHistory('game_master', 'An unexpected error occurred. Please try your action again.');
     }
   }
 
   private parseUserMessage(content: string): GameAction {
-    const [actionType, ...details] = content.split(' ');
-    switch (actionType.toLowerCase()) {
+    const tokens = content.split(/\s+/);
+    const possibleActionType = tokens[0];
+    const details = tokens.slice(1).join(' ');
+
+    const actionType = findBestMatchingActionType(possibleActionType);
+
+    switch (actionType) {
       case 'move':
-        return { type: 'move', playerId: 'user', details: { direction: details[0] } };
+        const directionMatch = details.match(/\b(north|south|east|west)\b/i);
+        return { 
+          type: 'move', 
+          playerId: 'user', 
+          details: { direction: directionMatch ? directionMatch[0].toLowerCase() : 'north' } 
+        };
       case 'search':
         return { type: 'search', playerId: 'user', details: {} };
       case 'examine':
-        return { type: 'examine', playerId: 'user', details: { targetId: details.join(' ') } };
+        return { type: 'examine', playerId: 'user', details: { targetId: details } };
       case 'accuse':
-        return { type: 'accuse', playerId: 'user', details: { suspectId: details[0], weaponId: details[1], locationId: details[2] } };
+        const [suspectId, weaponId, locationId] = details.split(/\s*,\s*/);
+        return { 
+          type: 'accuse', 
+          playerId: 'user', 
+          details: { suspectId, weaponId, locationId } 
+        };
+      case 'use_item':
+        return { type: 'use_item', playerId: 'user', details: { itemId: details } };
+      case 'pickup':
+        return { type: 'pickup', playerId: 'user', details: { itemId: details } };
+      case 'drop':
+        return { type: 'drop', playerId: 'user', details: { itemId: details } };
       case 'chat':
-        return { type: 'chat', playerId: 'user', details: { message: details.join(' ') } };
       default:
-        throw new Error(`Unknown action type: ${actionType}`);
+        return { type: 'chat', playerId: 'user', details: { message: content } };
     }
   }
 
   private handleGameMasterMessage(message: ChatEntry) {
     console.log('Game Master message:', message.content);
-  
+
     const [action, ...params] = message.content.split(' ');
-  
+
     switch (action.toLowerCase()) {
       case 'reveal_clue':
         this.revealClue(params[0]); // Param: clueId
@@ -122,11 +208,11 @@ export class GameEngine {
       default:
         console.warn(`Unknown Game Master action: ${action}`);
     }
-  
+
     // Update game state after processing the message
     messageBus.updateGameState(this.state);
   }
-  
+
   private revealClue(clueId: string) {
     const clue = this.state.clues.find(c => c.id === clueId);
     if (clue) {
@@ -134,31 +220,27 @@ export class GameEngine {
       this.addToChatHistory('game_master', `A new clue has been revealed: ${clue.description}`);
     }
   }
-  
+
   private triggerEvent(eventDescription: string) {
     // Implement event logic here
     this.state.events.push(eventDescription);
     this.addToChatHistory('game_master', `Event occurred: ${eventDescription}`);
   }
-  
+
   private advanceGamePhase() {
     updateGamePhase(this.state);
     this.addToChatHistory('game_master', `The game has entered a new phase: ${this.state.gamePhase}`);
   }
-  
+
   private addNarration(narration: string) {
     this.addToChatHistory('game_master', narration);
   }
-  
+
   private respondToPlayer(playerId: string, response: string) {
     const player = this.state.players.find(p => p.id === playerId);
     if (player) {
       this.addToChatHistory('game_master', `To ${player.name}: ${response}`);
     }
-  }
-
-  private async processAITurns() {
-    await processAITurns(this.state, this.gameAgentsGrab, this.addToChatHistory.bind(this));
   }
 
   private introduceCharacters(): void {

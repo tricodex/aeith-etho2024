@@ -4,33 +4,59 @@ import { GameState, GameAction, Player, Position, Item, Clue } from '@/types/gam
 import { getRoomAtPosition, advanceTurn, addClueToGame, generateLocalClue, updateGameState } from './gameState';
 import GameAgentsGrab from '../GameAgentsGrab';
 
+// export async function processAction(state: GameState, action: GameAction, gameAgentsGrab: GameAgentsGrab, addToChatHistory: Function): Promise<GameState> {
+//   try {
+//     // Process action through the game master API
+//     const response = await fetch('/api/game-master/process-action', {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify({ playerName: action.playerId, action, gameState: state }),
+//     });
+//     if (!response.ok) throw new Error('Failed to process action');
+//     const result = await response.json();
+
+//     // Update game state and chat history
+//     updateGameState(state, result);
+//     addToChatHistory('user', `${action.playerId} performed action: ${action.type}`);
+//     addToChatHistory('game_master', result.narrativeDescription || 'The action was processed.');
+
+//     // Process AI turns if it was a user action
+//     if (state.players.find(p => p.id === action.playerId)?.role === 'user') {
+//       await processAITurns(state, gameAgentsGrab, addToChatHistory);
+//     }
+
+//     return state;
+//   } catch (error) {
+//     console.error('Error processing action:', error);
+//     return handleActionLocally(state, action, addToChatHistory);
+//   }
+// }
+
 export async function processAction(state: GameState, action: GameAction, gameAgentsGrab: GameAgentsGrab, addToChatHistory: Function): Promise<GameState> {
-  try {
-    // Process action through the game master API
-    const response = await fetch('/api/game-master/process-action', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerName: action.playerId, action, gameState: state }),
-    });
-    if (!response.ok) throw new Error('Failed to process action');
-    const result = await response.json();
-
-    // Update game state and chat history
-    updateGameState(state, result);
-    addToChatHistory('user', `${action.playerId} performed action: ${action.type}`);
-    addToChatHistory('game_master', result.narrativeDescription || 'The action was processed.');
-
-    // Process AI turns if it was a user action
-    if (state.players.find(p => p.id === action.playerId)?.role === 'user') {
-      await processAITurns(state, gameAgentsGrab, addToChatHistory);
+    try {
+      // Process action through the game master API
+      const response = await fetch('/api/game-master/process-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerName: action.playerId, action, gameState: state }),
+      });
+      if (!response.ok) throw new Error('Failed to process action');
+      const result = await response.json();
+  
+      // Update game state and chat history
+      updateGameState(state, result);
+      addToChatHistory('user', `${action.playerId} performed action: ${action.type}`);
+      addToChatHistory('game_master', result.narrativeDescription || 'The action was processed.');
+  
+      // Advance turn only after processing the action
+      advanceTurn(state);
+  
+      return state;
+    } catch (error) {
+      console.error('Error processing action:', error);
+      return state;
     }
-
-    return state;
-  } catch (error) {
-    console.error('Error processing action:', error);
-    return handleActionLocally(state, action, addToChatHistory);
   }
-}
 
 export async function processAITurns(state: GameState, gameAgentsGrab: GameAgentsGrab, addToChatHistory: Function): Promise<void> {
   for (const player of state.players) {
@@ -129,7 +155,7 @@ function handleUseItem(state: GameState, player: Player, details: { itemId: stri
     state.events.push(`${player.name} used ${item.name}`);
     addToChatHistory('game_master', `${player.name} used ${item.name}`);
     // Implement item usage logic here
-    
+
   } else {
     state.events.push(`${player.name} tried to use an item they don't have`);
     addToChatHistory('game_master', `${player.name} tried to use an item they don't have`);
