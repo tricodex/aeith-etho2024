@@ -1,6 +1,8 @@
-// src/hooks/useAgentGrab.ts
+// src/hooks/useGameAgentsGrab.tsx
+
 import { useState, useEffect, useCallback } from 'react';
 import GameAgentsGrab from '@/utils/GameAgentsGrab';
+import { GameState, GameAction } from '@/types/gameTypes';
 
 interface Message {
   role: string;
@@ -43,10 +45,16 @@ export const useGameAgentsGrab = () => {
     await gameAgentsGrab.addMessage(agentType, message, chatId);
   }, [gameAgentsGrab]);
 
-  const monitorChat = useCallback((agentType: string, chatId: number | undefined, callback: (messages: Message[]) => void) => {
+  const generateAgentAction = useCallback(async (agentType: string, gameState: GameState): Promise<GameAction> => {
     if (!gameAgentsGrab) throw new Error("GameAgentsGrab not initialized");
-    return gameAgentsGrab.monitorChat(agentType, chatId, callback);
+    try {
+      return await gameAgentsGrab.generateAgentAction(agentType, gameState);
+    } catch (error) {
+      console.error(`Error generating action for ${agentType}:`, error);
+      setError(error instanceof Error ? error.message : String(error));
+      throw error;
+    }
   }, [gameAgentsGrab]);
 
-  return { createAgent, getAgentMessages, addMessage, monitorChat, error };
+  return { createAgent, getAgentMessages, addMessage, generateAgentAction, error };
 };

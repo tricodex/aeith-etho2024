@@ -57,6 +57,8 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
   const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const [hasChatted, setHasChatted] = useState(false);
+  const [hasActed, setHasActed] = useState(false);
 
   const initGame = useCallback(async () => {
     setIsLoading(true);
@@ -84,12 +86,12 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     initGame();
   }, [initGame]);
 
-  useEffect(() => {
-    messageBus.subscribe('user', handleGameMessage);
-    return () => {
-      messageBus.unsubscribe('user', handleGameMessage);
-    };
-  }, []);
+  // useEffect(() => {
+  //   messageBus.subscribe('user', handleGameMessage);
+  //   return () => {
+  //     messageBus.unsubscribe('user', handleGameMessage);
+  //   };
+  // }, []);
 
   useEffect(() => {
     if (gameState) {
@@ -97,14 +99,26 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     }
   }, [gameState]);
 
-  const handleGameMessage = useCallback((message: ChatEntry, gameState: GameState) => {
-    setGameState(gameState);
-    if (message.role === 'game_master') {
-      toast({
-        title: "Game Master",
-        description: message.content,
-      });
-    }
+  useEffect(() => {
+    const handleGameMessage = (message: ChatEntry, updatedGameState: GameState) => {
+      setGameState(updatedGameState);
+      if (message.role === 'game_master') {
+        toast({
+          title: "Game Master",
+          description: message.content,
+        });
+      }
+      // Reset action flags when it's the user's turn again
+      if (updatedGameState.currentTurn === 'user') {
+        setHasChatted(false);
+        setHasActed(false);
+      }
+    };
+  
+    messageBus.subscribe('game_engine', handleGameMessage);
+    return () => {
+      messageBus.unsubscribe('game_engine', handleGameMessage);
+    };
   }, [toast]);
 
   useEffect(() => {
@@ -127,34 +141,7 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     }
   }, [gameState, onRoomChange]);
 
-  // const handleUserAction = useCallback(async (action: GameAction) => {
-  //   if (!gameState) return;
 
-  //   try {
-  //     const updatedState = await gameEngine.processAction(action);
-  //     setGameState(updatedState);
-
-  //     messageBus.publish({
-  //       role: 'user',
-  //       content: JSON.stringify(action),
-  //       agentId: 'user',
-  //     });
-
-  //     if (gameEngine.isGameOver()) {
-  //       toast({
-  //         title: "Game Over",
-  //         description: "The mystery has been solved!",
-  //       });
-  //     }
-  //   } catch (error) {
-  //     console.error('Error processing action:', error);
-  //     toast({
-  //       title: "Error",
-  //       description: "Failed to process action. Please try again.",
-  //       variant: "destructive",
-  //     });
-  //   }
-  // }, [gameState, toast]);
 
   const handleUserAction = useCallback(async (action: GameAction) => {
     if (!gameState) return;
@@ -164,11 +151,21 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
         const updatedState = await gameEngine.processAction(action);
         setGameState(updatedState);
   
-        messageBus.publish({
-          role: 'user',
-          content: JSON.stringify(action),
-          agentId: 'user',
-        });
+        if (action.type === 'chat') {
+          // Mark chat action as completed
+          setHasChatted(true);
+        } else {
+          // Mark game action as completed
+          setHasActed(true);
+        }
+  
+        // Check if turn is complete
+        if (hasChatted && hasActed) {
+          // End turn
+          await gameEngine.endTurn();
+          setHasChatted(false);
+          setHasActed(false);
+        }
   
         if (gameEngine.isGameOver()) {
           toast({
@@ -191,24 +188,11 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
         variant: "destructive",
       });
     }
-  }, [gameState, toast]);
+  }, [gameState, hasChatted, hasActed, toast]);
 
   const handleActionSelect = (value: GameAction['type']) => {
     setSelectedAction(value);
     setActionDetails(null);
-  };
-
-  const handleActionSubmit = () => {
-    if (selectedAction && actionDetails) {
-      const action: GameAction = {
-        type: selectedAction,
-        playerId: 'user',
-        details: actionDetails
-      };
-      handleUserAction(action);
-      setSelectedAction(null);
-      setActionDetails(null);
-    }
   };
 
   const handleChatSubmit = () => {
@@ -220,6 +204,19 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
       };
       handleUserAction(chatAction);
       setChatInput('');
+    }
+  };
+  
+  const handleActionSubmit = () => {
+    if (selectedAction && actionDetails) {
+      const action: GameAction = {
+        type: selectedAction,
+        playerId: 'user',
+        details: actionDetails
+      };
+      handleUserAction(action);
+      setSelectedAction(null);
+      setActionDetails(null);
     }
   };
 
@@ -423,10 +420,16 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
         {renderGameInstructions()}
         {renderGameGrid()}
         <div className={styles.gameInfo}>
-          <p>Current Turn: {gameState.currentTurn}</p>
-          <p>Game Phase: {gameState.gamePhase}</p>
-          <p>Turn Count: {gameState.turnCount}</p>
-        </div>
+        <p>Current Turn: {gameState.currentTurn}</p>
+        <p>Game Phase: {gameState.gamePhase}</p>
+        <p>Turn Count: {gameState.turnCount}</p>
+        {gameState.currentTurn === 'user' && (
+          <>
+            <p>Chat Action: {hasChatted ? 'Completed' : 'Pending'}</p>
+            <p>Game Action: {hasActed ? 'Completed' : 'Pending'}</p>
+          </>
+        )}
+      </div>
         {renderChatLog()}
         <Tabs defaultValue="chat" className="w-full">
           <TabsList>
@@ -434,20 +437,23 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
             <TabsTrigger value="actions">Actions</TabsTrigger>
           </TabsList>
           <TabsContent value="chat">
-            <div className={styles.chatInput}>
-              <Input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Type your message..."
-                onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
-              />
-              <Button onClick={handleChatSubmit}>Send</Button>
-            </div>
-          </TabsContent>
-          <TabsContent value="actions">
-            <div className={styles.actionInput}>
-              <Select onValueChange={handleActionSelect}>
+  <div className={styles.chatInput}>
+    <Input
+      type="text"
+      value={chatInput}
+      onChange={(e) => setChatInput(e.target.value)}
+      placeholder="Type your message..."
+      onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
+      disabled={gameState.currentTurn !== 'user' || hasChatted}
+    />
+    <Button onClick={handleChatSubmit} disabled={gameState.currentTurn !== 'user' || hasChatted}>
+      Send
+    </Button>
+  </div>
+</TabsContent>
+<TabsContent value="actions">
+  <div className={styles.actionInput}>
+    <Select onValueChange={handleActionSelect} disabled={gameState.currentTurn !== 'user' || hasActed}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select an action" />
                 </SelectTrigger>
@@ -460,13 +466,16 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
                   <SelectItem value="use_item">Use Item</SelectItem>
                   <SelectItem value="accuse">Accuse</SelectItem>
                 </SelectContent>
-              </Select>
-              {selectedAction && renderActionDetails()}
-              <Button onClick={handleActionSubmit} disabled={!selectedAction || !actionDetails}>
-                Submit Action
-              </Button>
-            </div>
-          </TabsContent>
+                </Select>
+    {selectedAction && renderActionDetails()}
+    <Button 
+      onClick={handleActionSubmit} 
+      disabled={gameState.currentTurn !== 'user' || hasActed || !selectedAction || !actionDetails}
+    >
+      Submit Action
+    </Button>
+  </div>
+</TabsContent>
         </Tabs>
       </CardContent>
     </Card>

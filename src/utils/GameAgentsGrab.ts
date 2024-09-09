@@ -40,9 +40,9 @@ class GameAgentsGrab {
     });
   }
 
-  private async ensureAgentInitialized(agentType: string, message?: string): Promise<void> {
+  private async ensureAgentInitialized(agentType: string): Promise<void> {
     if (!this.initialized[agentType]) {
-      await this.createAgent(agentType, message || 'Initialize agent', 2);
+      await this.createAgent(agentType, 'Initialize agent', 2);
     }
   }
 
@@ -124,46 +124,6 @@ class GameAgentsGrab {
     }
   }
 
-  async monitorChat(agentType: string, chatId: number | undefined, callback: (messages: Message[]) => void): Promise<() => void> {
-    await this.ensureAgentInitialized(agentType);
-    const actualChatId = chatId || this.chatIds[agentType];
-    let messageCount = 0;
-    const interval = setInterval(async () => {
-      try {
-        const messages = await this.getAgentMessages(agentType, actualChatId);
-        if (messages.length > messageCount) {
-          messageCount = messages.length;
-          callback(messages);
-        }
-        const isFinished = await this.isRunFinished(agentType, actualChatId);
-        if (isFinished) {
-          clearInterval(interval);
-          console.log(`Chat ${actualChatId} for ${agentType} has finished.`);
-        }
-      } catch (err) {
-        console.error(`Error monitoring ${agentType} chat:`, err);
-        clearInterval(interval);
-      }
-    }, 5000); // Check every 5 seconds
-
-    return () => clearInterval(interval); // Return cleanup function
-  }
-
-  async isRunFinished(agentType: string, chatId?: number): Promise<boolean> {
-    await this.ensureAgentInitialized(agentType);
-    try {
-      const contract = this.contracts[agentType];
-      if (!contract) {
-        throw new Error(`Invalid agent type: ${agentType}`);
-      }
-      const actualChatId = chatId || this.chatIds[agentType];
-      return await contract.isRunFinished(actualChatId);
-    } catch (err) {
-      console.error(`Error checking if ${agentType} run is finished:`, err);
-      throw err;
-    }
-  }
-
   async generateAgentAction(agentType: string, gameState: GameState): Promise<GameAction> {
     await this.ensureAgentInitialized(agentType);
     try {
@@ -208,9 +168,9 @@ class GameAgentsGrab {
     try {
       const parsedResponse = JSON.parse(response);
       return {
-        type: parsedResponse.type,
+        type: parsedResponse.action.type,
         playerId: agentType,
-        details: parsedResponse.details
+        details: parsedResponse.action.details
       };
     } catch (error) {
       console.error('Error parsing agent response:', error);

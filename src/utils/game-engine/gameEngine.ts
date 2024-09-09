@@ -1,46 +1,17 @@
-import { GameState, GameAction, Player, ChatEntry, Clue, Item, Position, ActionType } from '@/types/gameTypes';
+// src/utils/game-engine/gameEngine.ts
+
+import { GameState, GameAction, Player, Clue, ChatEntry } from '@/types/gameTypes';
 import GameAgentsGrab from '../GameAgentsGrab';
 import { createDefaultGameState, initializeGame } from './gameInitialization';
-import { processAction, processAITurns, provideClue } from './gameActions';
-import { addToChatHistory, isGameOver, updateGamePhase, getRoomAtPosition, movePlayer, validateAccusation } from './gameHelpers';
+import { processAction, provideClue } from './gameActions';
+import { addToChatHistory, isGameOver, updateGamePhase, getRoomAtPosition } from './gameHelpers';
 import { messageBus } from '../MessageBus';
-
-const actionTypeMap: { [key: string]: ActionType } = {
-  move: 'move',
-  search: 'search',
-  examine: 'examine',
-  accuse: 'accuse',
-  chat: 'chat',
-  use: 'use_item',
-  pickup: 'pickup',
-  drop: 'drop',
-};
-
-function normalizeText(text: string): string {
-  return text.toLowerCase().trim();
-}
-
-function fuzzyMatch(input: string, target: string): boolean {
-  const normalizedInput = normalizeText(input);
-  const normalizedTarget = normalizeText(target);
-  return normalizedInput.includes(normalizedTarget) || normalizedTarget.includes(normalizedInput);
-}
-
-function findBestMatchingActionType(input: string): ActionType {
-  for (const [key, value] of Object.entries(actionTypeMap)) {
-    if (fuzzyMatch(input, key)) {
-      return value;
-    }
-  }
-  return 'chat'; // Default to chat if no match is found
-}
 
 export class GameEngine {
   private state: GameState;
   private gameAgentsGrab: GameAgentsGrab;
   private chatHistory: ChatEntry[];
-  private turnQueue: string[] = [];
-  private processingTurn: boolean = false;
+  private currentTurnActions: { chat: boolean; action: boolean } = { chat: false, action: false };
 
   constructor() {
     this.state = createDefaultGameState();
@@ -71,14 +42,25 @@ export class GameEngine {
   }
 
   public async processAction(action: GameAction): Promise<GameState> {
+    if (this.state.currentTurn !== action.playerId) {
+      throw new Error("It's not your turn!");
+    }
+
     try {
-      const updatedState = await processAction(this.state, action, this.gameAgentsGrab, this.addToChatHistory.bind(this));
-      this.state = updatedState;
+      if (action.type === 'chat') {
+        this.currentTurnActions.chat = true;
+        this.addToChatHistory(action.playerId, action.details.message);
+      } else {
+        this.currentTurnActions.action = true;
+        const updatedState = await processAction(this.state, action, this.gameAgentsGrab, this.addToChatHistory.bind(this));
+        this.state = updatedState;
+      }
+
       messageBus.updateGameState(this.state);
 
-      this.state.currentTurn = this.getNextTurn();
-      this.turnQueue.push(this.state.currentTurn);
-      this.processTurnQueue();
+      if (this.currentTurnActions.chat && this.currentTurnActions.action) {
+        this.endTurn();
+      }
 
       return this.state;
     } catch (error) {
@@ -88,29 +70,35 @@ export class GameEngine {
     }
   }
 
-  private async processTurnQueue() {
-    if (this.processingTurn || this.turnQueue.length === 0) return;
-
-    this.processingTurn = true;
-    const playerId = this.turnQueue.shift();
-
-    if (playerId) {
-      if (playerId === 'user') {
-        // Wait for user input
-        this.processingTurn = false;
-      } else {
-        await this.processAITurn(playerId);
-        this.processingTurn = false;
-        setTimeout(() => this.processTurnQueue(), 5000); // 5-second delay between AI turns
+  private async processAITurn(playerId: string) {
+    this.addToChatHistory('game_master', `It's ${playerId}'s turn.`);
+    
+    try {
+      const chatAction = await this.gameAgentsGrab.generateAgentAction(playerId, this.state);
+      if (chatAction.type === 'chat') {
+        await this.processAction(chatAction);
       }
-    } else {
-      this.processingTurn = false;
+
+      const gameAction = await this.gameAgentsGrab.generateAgentAction(playerId, this.state);
+      if (gameAction.type !== 'chat') {
+        await this.processAction(gameAction);
+      }
+    } catch (error) {
+      console.error(`Error processing AI turn for ${playerId}:`, error);
+      this.addToChatHistory('game_master', `${playerId} encountered an issue and skipped their turn.`);
     }
+
+    this.endTurn();
   }
 
-  private async processAITurn(playerId: string) {
-    const aiAction = await this.gameAgentsGrab.generateAgentAction(playerId, this.state);
-    await this.processAction(aiAction);
+  public endTurn() {
+    this.currentTurnActions = { chat: false, action: false };
+    this.state.currentTurn = this.getNextTurn();
+    this.addToChatHistory('game_master', `${this.state.currentTurn}'s turn begins.`);
+
+    if (this.state.currentTurn !== 'user') {
+      this.processAITurn(this.state.currentTurn);
+    }
   }
 
   private getNextTurn(): string {
@@ -134,7 +122,7 @@ export class GameEngine {
 
   private async handleMessage(message: ChatEntry, gameState: GameState) {
     try {
-      if (message.role === 'user') {
+      if (message.role === 'user' && this.state.currentTurn === 'user') {
         const action = this.parseUserMessage(message.content);
         await this.processAction(action);
       } else if (message.role === 'game_master') {
@@ -147,72 +135,53 @@ export class GameEngine {
   }
 
   private parseUserMessage(content: string): GameAction {
-    const tokens = content.split(/\s+/);
-    const possibleActionType = tokens[0];
-    const details = tokens.slice(1).join(' ');
-
-    const actionType = findBestMatchingActionType(possibleActionType);
-
-    switch (actionType) {
-      case 'move':
-        const directionMatch = details.match(/\b(north|south|east|west)\b/i);
-        return { 
-          type: 'move', 
-          playerId: 'user', 
-          details: { direction: directionMatch ? directionMatch[0].toLowerCase() : 'north' } 
-        };
-      case 'search':
-        return { type: 'search', playerId: 'user', details: {} };
-      case 'examine':
-        return { type: 'examine', playerId: 'user', details: { targetId: details } };
-      case 'accuse':
-        const [suspectId, weaponId, locationId] = details.split(/\s*,\s*/);
-        return { 
-          type: 'accuse', 
-          playerId: 'user', 
-          details: { suspectId, weaponId, locationId } 
-        };
-      case 'use_item':
-        return { type: 'use_item', playerId: 'user', details: { itemId: details } };
-      case 'pickup':
-        return { type: 'pickup', playerId: 'user', details: { itemId: details } };
-      case 'drop':
-        return { type: 'drop', playerId: 'user', details: { itemId: details } };
-      case 'chat':
-      default:
-        return { type: 'chat', playerId: 'user', details: { message: content } };
+    const lowerContent = content.toLowerCase().trim();
+    const words = lowerContent.split(' ');
+  
+    if (words[0] === 'move') {
+      const directions = ['north', 'south', 'east', 'west'];
+      const direction = words[1];
+      if (directions.includes(direction)) {
+        return { type: 'move', playerId: 'user', details: { direction } };
+      }
+    } else if (words[0] === 'search') {
+      return { type: 'search', playerId: 'user', details: {} };
+    } else if (words[0] === 'examine' && words.length > 1) {
+      const target = words.slice(1).join(' ');
+      return { type: 'examine', playerId: 'user', details: { targetId: target } };
     }
+  
+    return { type: 'chat', playerId: 'user', details: { message: content } };
   }
-
+  
   private handleGameMasterMessage(message: ChatEntry) {
     console.log('Game Master message:', message.content);
-
+  
     const [action, ...params] = message.content.split(' ');
-
+  
     switch (action.toLowerCase()) {
       case 'reveal_clue':
-        this.revealClue(params[0]); // Param: clueId
+        this.revealClue(params[0]);
         break;
       case 'trigger_event':
-        this.triggerEvent(params.join(' ')); // Param: event description
+        this.triggerEvent(params.join(' '));
         break;
       case 'advance_phase':
         this.advanceGamePhase();
         break;
       case 'narrate':
-        this.addNarration(params.join(' ')); // Param: narration text
+        this.addNarration(params.join(' '));
         break;
       case 'respond_to_player':
-        this.respondToPlayer(params[0], params.slice(1).join(' ')); // Params: playerId, response
+        this.respondToPlayer(params[0], params.slice(1).join(' '));
         break;
       default:
         console.warn(`Unknown Game Master action: ${action}`);
     }
-
-    // Update game state after processing the message
+  
     messageBus.updateGameState(this.state);
   }
-
+  
   private revealClue(clueId: string) {
     const clue = this.state.clues.find(c => c.id === clueId);
     if (clue) {
@@ -220,22 +189,21 @@ export class GameEngine {
       this.addToChatHistory('game_master', `A new clue has been revealed: ${clue.description}`);
     }
   }
-
+  
   private triggerEvent(eventDescription: string) {
-    // Implement event logic here
     this.state.events.push(eventDescription);
     this.addToChatHistory('game_master', `Event occurred: ${eventDescription}`);
   }
-
+  
   private advanceGamePhase() {
     updateGamePhase(this.state);
     this.addToChatHistory('game_master', `The game has entered a new phase: ${this.state.gamePhase}`);
   }
-
+  
   private addNarration(narration: string) {
     this.addToChatHistory('game_master', narration);
   }
-
+  
   private respondToPlayer(playerId: string, response: string) {
     const player = this.state.players.find(p => p.id === playerId);
     if (player) {
@@ -252,6 +220,9 @@ export class GameEngine {
   private startFirstTurn(): void {
     this.state.currentTurn = this.state.players[0].id;
     this.addToChatHistory('game_master', `The game begins. It's ${this.state.players[0].name}'s turn.`);
+    if (this.state.currentTurn !== 'user') {
+      this.processAITurn(this.state.currentTurn);
+    }
   }
 }
 
