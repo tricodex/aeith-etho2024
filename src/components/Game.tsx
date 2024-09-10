@@ -18,6 +18,7 @@ const playerColors = {
   'green-turtle': 'bg-green-500 text-white',
   'red-donkey': 'bg-red-500 text-white',
   'user': 'bg-purple-500 text-white',
+  'game-master': 'bg-yellow-500 text-black', // Game Master color
 };
 
 const actionIcons = {
@@ -45,6 +46,11 @@ const AeithGame = () => {
     setGameState(engine.getGameState());
     setGameStarted(true);
     setIsLoading(false);
+
+    // Game Master initialization message
+    const initMessage = await fetch('/api/game-master/initialize', { method: 'POST' });
+    const initData = await initMessage.json();
+    setChatHistory([{ role: 'system', content: initData.message || "Welcome to the Aeith Murder Mystery Game!", agentId: 'game-master' }]);
   };
 
   const updateChatHistory = useCallback(async () => {
@@ -75,6 +81,16 @@ const AeithGame = () => {
     try {
       const result = await gameEngine.performAction('user', selectedAction, actionTarget || inputMessage);
       setChatHistory(prev => [...prev, { role: 'user', content: inputMessage, agentId: 'user' }, { role: 'system', content: result }]);
+
+      // Game Master response
+      const gameMasterResponse = await fetch('/api/game-master/process-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerName: 'user', action: { type: selectedAction, target: actionTarget || inputMessage }, gameState }),
+      });
+      const gameMasterData = await gameMasterResponse.json();
+      setChatHistory(prev => [...prev, { role: 'system', content: gameMasterData.narrativeDescription, agentId: 'game-master' }]);
+
       setGameState(gameEngine.getGameState());
       setInputMessage('');
       setActionTarget('');
@@ -135,7 +151,7 @@ const AeithGame = () => {
 
   if (!gameStarted) {
     return (
-        <div className={styles.initializationContainer}>
+      <div className={styles.initializationContainer}>
         <h1 className={styles.gameTitle}>Aeith Murder Mystery Game</h1>
         <p className={styles.gameDescription}>Welcome to the Aeith Murder Mystery Game! Investigate the haunted mansion, interact with AI characters, and solve the mystery.</p>
         <Button onClick={initGame} disabled={isLoading} className={styles.startButton}>
@@ -231,7 +247,7 @@ const AeithGame = () => {
                         <AvatarFallback>{player.name[0]}</AvatarFallback>
                       </Avatar>
                     )}
-                    <strong className="text-lg">{player ? player.name : msg.role}: </strong>
+                    <strong className="text-lg">{player ? player.name : msg.agentId === 'game-master' ? 'Game Master' : msg.role}: </strong>
                   </div>
                   <div className="ml-10 text-white">
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
