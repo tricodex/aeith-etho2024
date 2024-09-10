@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import Image from 'next/image';
 import '@/styles/Hero.css';
+import Link from 'next/link';
 
 const Cube: React.FC<{ index: number }> = ({ index }) => (
   <div
@@ -68,7 +69,10 @@ const HeroSection: React.FC = () => {
             Step into a turn-based murder mystery set in a haunted mansion. Play as Blue Fish, Orange Crab, Green Turtle, or Red Donkey, each with unique abilities and objectives. Use chat-based commands and movement inputs to solve the mystery or hide the truth. Powered by Galadriel’s on-chain AI and managed by the Game Master through the Gemini API.
           </p>
           <div className="button-group">
-            <button className="btn btn-primary neon-btn">Play Now</button>
+          <Link href="/game">
+  <button className="btn btn-primary neon-btn">Play Now</button>
+</Link>
+
             <button className="btn btn-secondary">Learn More</button>
           </div>
         </div>
