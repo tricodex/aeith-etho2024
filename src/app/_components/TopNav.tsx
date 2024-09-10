@@ -80,6 +80,9 @@ const TopNav: React.FC = () => {
               <DropdownMenuItem>
                 <Link href="/dashboard" className="w-full text-cyan-400 hover:text-white">Dashboard</Link>
               </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Link href="/group-chat" className="w-full text-cyan-400 hover:text-white">Group</Link>
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>

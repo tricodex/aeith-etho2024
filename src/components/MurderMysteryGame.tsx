@@ -21,6 +21,7 @@ import styles from '@/styles/MurderMystery.module.css';
 const GRID_SIZE = 10;
 const CELL_SIZE = 60; // in pixels
 
+// Character SVGs for displaying different player icons
 const characterSvgs: Record<string, string> = {
   'blue-fish': '/svgs/blue-fish.svg',
   'orange-crab': '/svgs/orange-crab.svg',
@@ -29,6 +30,7 @@ const characterSvgs: Record<string, string> = {
   'user': '/svgs/user.svg',
 };
 
+// Room SVGs for different rooms in the mansion
 const roomSvgs: Record<string, string> = {
   'Foyer': '/rooms/foyer.svg',
   'Living Room': '/rooms/living-room.svg',
@@ -51,6 +53,7 @@ interface MurderMysteryGameProps {
 }
 
 const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) => {
+  // Define state variables for the component
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [selectedAction, setSelectedAction] = useState<GameAction['type'] | null>(null);
   const [actionDetails, setActionDetails] = useState<any>(null);
@@ -60,6 +63,7 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
   const [hasChatted, setHasChatted] = useState(false);
   const [hasActed, setHasActed] = useState(false);
 
+  // Initialize the game when the component is mounted
   const initGame = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -82,23 +86,19 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     }
   }, [toast]);
 
+  // useEffect to initialize the game when the component first renders
   useEffect(() => {
     initGame();
   }, [initGame]);
 
-  // useEffect(() => {
-  //   messageBus.subscribe('user', handleGameMessage);
-  //   return () => {
-  //     messageBus.unsubscribe('user', handleGameMessage);
-  //   };
-  // }, []);
-
+  // Subscribe to game updates using the message bus
   useEffect(() => {
     if (gameState) {
       messageBus.updateGameState(gameState);
     }
   }, [gameState]);
 
+  // Listen for updates from the message bus and update the game state
   useEffect(() => {
     const handleGameMessage = (message: ChatEntry, updatedGameState: GameState) => {
       setGameState(updatedGameState);
@@ -108,19 +108,19 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
           description: message.content,
         });
       }
-      // Reset action flags when it's the user's turn again
       if (updatedGameState.currentTurn === 'user') {
         setHasChatted(false);
         setHasActed(false);
       }
     };
-  
+
     messageBus.subscribe('game_engine', handleGameMessage);
     return () => {
       messageBus.unsubscribe('game_engine', handleGameMessage);
     };
   }, [toast]);
 
+  // Update room info based on user's position in the game state
   useEffect(() => {
     if (gameState && gameState.mansion && gameState.mansion.layout) {
       const userPlayer = gameState.players.find(p => p.role === 'user');
@@ -141,32 +141,29 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     }
   }, [gameState, onRoomChange]);
 
-
-
+  // Handle user actions during the game (move, search, examine, etc.)
   const handleUserAction = useCallback(async (action: GameAction) => {
     if (!gameState) return;
-  
+
     try {
       if (gameState.currentTurn === 'user') {
         const updatedState = await gameEngine.processAction(action);
         setGameState(updatedState);
-  
+
         if (action.type === 'chat') {
-          // Mark chat action as completed
           setHasChatted(true);
         } else {
-          // Mark game action as completed
           setHasActed(true);
         }
-  
-        // Check if turn is complete
+
+        // End the user's turn after both chat and action are completed
         if (hasChatted && hasActed) {
-          // End turn
           await gameEngine.endTurn();
           setHasChatted(false);
           setHasActed(false);
         }
-  
+
+        // Check if the game is over
         if (gameEngine.isGameOver()) {
           toast({
             title: "Game Over",
@@ -190,11 +187,13 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     }
   }, [gameState, hasChatted, hasActed, toast]);
 
+  // Action selection handler
   const handleActionSelect = (value: GameAction['type']) => {
     setSelectedAction(value);
     setActionDetails(null);
   };
 
+  // Chat submission handler
   const handleChatSubmit = () => {
     if (chatInput.trim()) {
       const chatAction: GameAction = {
@@ -206,7 +205,8 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
       setChatInput('');
     }
   };
-  
+
+  // Action submission handler
   const handleActionSubmit = () => {
     if (selectedAction && actionDetails) {
       const action: GameAction = {
@@ -220,6 +220,7 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     }
   };
 
+  // Render details for the selected action
   const renderActionDetails = () => {
     if (!gameState) return null;
 
@@ -247,92 +248,24 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
         return (
           <Select onValueChange={(value) => setActionDetails({ targetId: value })}>
             <SelectTrigger>
-              <SelectValue placeholder="Select item to examine" />
+              <SelectValue placeholder="Select target to examine" />
             </SelectTrigger>
             <SelectContent>
               {currentRoom?.items.map(item => (
                 <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
               ))}
-            </SelectContent>
-          </Select>
-        );
-      case 'pickup':
-        return (
-          <Select onValueChange={(value) => setActionDetails({ itemId: value })}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select item to pick up" />
-            </SelectTrigger>
-            <SelectContent>
-              {currentRoom?.items.filter(item => item.canPickUp).map(item => (
-                <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+              {gameState.players.filter(p => p.position.x === userPlayer.position.x && p.position.y === userPlayer.position.y && p.id !== userPlayer.id).map(player => (
+                <SelectItem key={player.id} value={player.id}>{player.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        );
-      case 'drop':
-        return (
-          <Select onValueChange={(value) => setActionDetails({ itemId: value })}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select item to drop" />
-            </SelectTrigger>
-            <SelectContent>
-              {userPlayer.inventory.map(item => (
-                <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        );
-      case 'use_item':
-        return (
-          <Select onValueChange={(value) => setActionDetails({ itemId: value })}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select item to use" />
-            </SelectTrigger>
-            <SelectContent>
-              {userPlayer.inventory.filter(item => item.useAction).map(item => (
-                <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        );
-      case 'accuse':
-        return (
-          <>
-            <Select onValueChange={(value) => setActionDetails((prev: any) => ({ ...prev, suspectId: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select suspect" />
-              </SelectTrigger>
-              <SelectContent>
-                {gameState.players.filter(p => p.role !== 'user').map(player => (
-                  <SelectItem key={player.id} value={player.id}>{player.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select onValueChange={(value) => setActionDetails((prev: any) => ({ ...prev, weaponId: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select weapon" />
-              </SelectTrigger>
-              <SelectContent>
-                {/* Populate with available weapons */}
-              </SelectContent>
-            </Select>
-            <Select onValueChange={(value) => setActionDetails((prev: any) => ({ ...prev, locationId: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select location" />
-              </SelectTrigger>
-              <SelectContent>
-                {gameState.mansion.rooms.map(room => (
-                  <SelectItem key={room.id} value={room.id}>{room.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </>
         );
       default:
         return null;
     }
   };
 
+  // Render the game grid showing rooms and players
   const renderGameGrid = useCallback(() => {
     if (!gameState || !gameState.mansion || !gameState.mansion.layout) return null;
 
@@ -372,6 +305,7 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     );
   }, [gameState]);
 
+  // Render game instructions for the user
   const renderGameInstructions = () => (
     <Accordion type="single" collapsible className="mb-4">
       <AccordionItem value="instructions">
@@ -380,15 +314,16 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
           <ol className="list-decimal pl-5">
             <li>Use the chat to communicate with other characters and gather information.</li>
             <li>Select specific actions from the "Actions" tab to interact with the environment.</li>
-            <li>Move around the mansion, search for clues, and examine objects.</li>
-            <li>Use the items you find and keep track of the information you gather.</li>
-            <li>Make an accusation when you think you've solved the mystery.</li>
+            <li>Move around the mansion, search for clues, and examine objects or characters.</li>
+            <li>Keep track of the information you gather to solve the mystery.</li>
+            <li>Your turn consists of one chat action and one game action.</li>
           </ol>
         </AccordionContent>
       </AccordionItem>
     </Accordion>
   );
 
+  // Render the chat log showing conversation history
   const renderChatLog = () => (
     <ScrollArea className={`${styles.gameLog} h-[300px]`}>
       {gameState?.events.map((event, index) => (
@@ -403,14 +338,17 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
     </ScrollArea>
   );
 
+  // Render loading state
   if (isLoading) {
     return <div>Loading game...</div>;
   }
 
+  // Render error state if game fails to load
   if (!gameState || !gameState.mansion || !gameState.mansion.layout) {
     return <div>Error: Unable to load game state. Please refresh the page.</div>;
   }
 
+  // Render the main game UI
   return (
     <Card className={styles.gameContainer}>
       <CardHeader>
@@ -420,16 +358,16 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
         {renderGameInstructions()}
         {renderGameGrid()}
         <div className={styles.gameInfo}>
-        <p>Current Turn: {gameState.currentTurn}</p>
-        <p>Game Phase: {gameState.gamePhase}</p>
-        <p>Turn Count: {gameState.turnCount}</p>
-        {gameState.currentTurn === 'user' && (
-          <>
-            <p>Chat Action: {hasChatted ? 'Completed' : 'Pending'}</p>
-            <p>Game Action: {hasActed ? 'Completed' : 'Pending'}</p>
-          </>
-        )}
-      </div>
+          <p>Current Turn: {gameState.currentTurn}</p>
+          <p>Game Phase: {gameState.gamePhase}</p>
+          <p>Turn Count: {gameState.turnCount}</p>
+          {gameState.currentTurn === 'user' && (
+            <>
+              <p>Chat Action: {hasChatted ? 'Completed' : 'Pending'}</p>
+              <p>Game Action: {hasActed ? 'Completed' : 'Pending'}</p>
+            </>
+          )}
+        </div>
         {renderChatLog()}
         <Tabs defaultValue="chat" className="w-full">
           <TabsList>
@@ -437,23 +375,23 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
             <TabsTrigger value="actions">Actions</TabsTrigger>
           </TabsList>
           <TabsContent value="chat">
-  <div className={styles.chatInput}>
-    <Input
-      type="text"
-      value={chatInput}
-      onChange={(e) => setChatInput(e.target.value)}
-      placeholder="Type your message..."
-      onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
-      disabled={gameState.currentTurn !== 'user' || hasChatted}
-    />
-    <Button onClick={handleChatSubmit} disabled={gameState.currentTurn !== 'user' || hasChatted}>
-      Send
-    </Button>
-  </div>
-</TabsContent>
-<TabsContent value="actions">
-  <div className={styles.actionInput}>
-    <Select onValueChange={handleActionSelect} disabled={gameState.currentTurn !== 'user' || hasActed}>
+            <div className={styles.chatInput}>
+              <Input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type your message..."
+                onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
+                disabled={gameState.currentTurn !== 'user' || hasChatted}
+              />
+              <Button onClick={handleChatSubmit} disabled={gameState.currentTurn !== 'user' || hasChatted}>
+                Send
+              </Button>
+            </div>
+          </TabsContent>
+          <TabsContent value="actions">
+            <div className={styles.actionInput}>
+              <Select onValueChange={handleActionSelect} disabled={gameState.currentTurn !== 'user' || hasActed}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select an action" />
                 </SelectTrigger>
@@ -461,21 +399,17 @@ const MurderMysteryGame: React.FC<MurderMysteryGameProps> = ({ onRoomChange }) =
                   <SelectItem value="move">Move</SelectItem>
                   <SelectItem value="search">Search</SelectItem>
                   <SelectItem value="examine">Examine</SelectItem>
-                  <SelectItem value="pickup">Pick Up</SelectItem>
-                  <SelectItem value="drop">Drop</SelectItem>
-                  <SelectItem value="use_item">Use Item</SelectItem>
-                  <SelectItem value="accuse">Accuse</SelectItem>
                 </SelectContent>
-                </Select>
-    {selectedAction && renderActionDetails()}
-    <Button 
-      onClick={handleActionSubmit} 
-      disabled={gameState.currentTurn !== 'user' || hasActed || !selectedAction || !actionDetails}
-    >
-      Submit Action
-    </Button>
-  </div>
-</TabsContent>
+              </Select>
+              {selectedAction && renderActionDetails()}
+              <Button 
+                onClick={handleActionSubmit} 
+                disabled={gameState.currentTurn !== 'user' || hasActed || !selectedAction || !actionDetails}
+              >
+                Submit Action
+              </Button>
+            </div>
+          </TabsContent>
         </Tabs>
       </CardContent>
     </Card>

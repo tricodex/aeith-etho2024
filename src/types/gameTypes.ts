@@ -74,11 +74,13 @@ export interface Position {
     canPickUp: boolean;
   }
   
-  export type ActionType = 'move' | 'search' | 'accuse' | 'use_item' | 'chat' | 'pickup' | 'drop' | 'examine';
-  
-  export interface GameAction {
-    type: ActionType;
-    playerId: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    details: any; // Change this to 'any' to allow different types of details
+  // export type ActionType = 'move' | 'search' | 'accuse' | 'use_item' | 'chat' | 'pickup' | 'drop' | 'examine';
+
+  export type ActionType = 'move' | 'search' | 'examine' | 'accuse' | 'chat';
+
+export interface GameAction {
+  type: ActionType;
+  playerId: string;
+  details: any; // You might want to make this more specific based on the action type
 }
+  

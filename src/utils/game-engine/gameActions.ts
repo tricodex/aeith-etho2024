@@ -4,35 +4,7 @@ import { GameState, GameAction, Player, Position, Item, Clue } from '@/types/gam
 import { getRoomAtPosition, advanceTurn, addClueToGame, generateLocalClue, updateGameState } from './gameState';
 import GameAgentsGrab from '../GameAgentsGrab';
 
-// export async function processAction(state: GameState, action: GameAction, gameAgentsGrab: GameAgentsGrab, addToChatHistory: Function): Promise<GameState> {
-//   try {
-//     // Process action through the game master API
-//     const response = await fetch('/api/game-master/process-action', {
-//       method: 'POST',
-//       headers: { 'Content-Type': 'application/json' },
-//       body: JSON.stringify({ playerName: action.playerId, action, gameState: state }),
-//     });
-//     if (!response.ok) throw new Error('Failed to process action');
-//     const result = await response.json();
-
-//     // Update game state and chat history
-//     updateGameState(state, result);
-//     addToChatHistory('user', `${action.playerId} performed action: ${action.type}`);
-//     addToChatHistory('game_master', result.narrativeDescription || 'The action was processed.');
-
-//     // Process AI turns if it was a user action
-//     if (state.players.find(p => p.id === action.playerId)?.role === 'user') {
-//       await processAITurns(state, gameAgentsGrab, addToChatHistory);
-//     }
-
-//     return state;
-//   } catch (error) {
-//     console.error('Error processing action:', error);
-//     return handleActionLocally(state, action, addToChatHistory);
-//   }
-// }
-
-export async function processAction(state: GameState, action: GameAction, gameAgentsGrab: GameAgentsGrab, addToChatHistory: Function): Promise<GameState> {
+export async function processAction(state: GameState, action: GameAction, addToChatHistory: Function): Promise<GameState> {
     try {
       // Process action through the game master API
       const response = await fetch('/api/game-master/process-action', {
@@ -58,41 +30,41 @@ export async function processAction(state: GameState, action: GameAction, gameAg
     }
   }
 
-export async function processAITurns(state: GameState, gameAgentsGrab: GameAgentsGrab, addToChatHistory: Function): Promise<void> {
-  for (const player of state.players) {
-    if (player.role === 'ai' && player.id === state.currentTurn) {
-      const aiAction = await gameAgentsGrab.generateAgentAction(player.id, state);
-      await processAction(state, aiAction, gameAgentsGrab, addToChatHistory);
-    }
-  }
-}
+// export async function processAITurns(state: GameState, gameAgentsGrab: GameAgentsGrab, addToChatHistory: Function): Promise<void> {
+//   for (const player of state.players) {
+//     if (player.role === 'ai' && player.id === state.currentTurn) {
+//       const aiAction = await gameAgentsGrab.generateAgentAction(player.id, state);
+//       await processAction(state, aiAction, gameAgentsGrab, addToChatHistory);
+//     }
+//   }
+// }
 
-function handleActionLocally(state: GameState, action: GameAction, addToChatHistory: Function): GameState {
-  const player = state.players.find(p => p.id === action.playerId);
-  if (!player) return state;
+// function handleActionLocally(state: GameState, action: GameAction, addToChatHistory: Function): GameState {
+//   const player = state.players.find(p => p.id === action.playerId);
+//   if (!player) return state;
 
-  switch (action.type) {
-    case 'move':
-      return handleMove(state, player, action.details as { direction: string }, addToChatHistory);
-    case 'search':
-      return handleSearch(state, player, addToChatHistory);
-    case 'accuse':
-      return handleAccusation(state, player, action.details as { suspectId: string, weaponId: string, locationId: string }, addToChatHistory);
-    case 'use_item':
-      return handleUseItem(state, player, action.details as { itemId: string }, addToChatHistory);
-    case 'chat':
-      return handleChat(state, player, action.details as { message: string }, addToChatHistory);
-    case 'pickup':
-      return handlePickup(state, player, action.details as { itemId: string }, addToChatHistory);
-    case 'drop':
-      return handleDrop(state, player, action.details as { itemId: string }, addToChatHistory);
-    case 'examine':
-      return handleExamine(state, player, action.details as { targetId: string }, addToChatHistory);
-    default:
-      console.error('Invalid action type:', action.type);
-      return state;
-  }
-}
+//   switch (action.type) {
+//     case 'move':
+//       return handleMove(state, player, action.details as { direction: string }, addToChatHistory);
+//     case 'search':
+//       return handleSearch(state, player, addToChatHistory);
+//     case 'accuse':
+//       return handleAccusation(state, player, action.details as { suspectId: string, weaponId: string, locationId: string }, addToChatHistory);
+//     case 'use_item':
+//       return handleUseItem(state, player, action.details as { itemId: string }, addToChatHistory);
+//     case 'chat':
+//       return handleChat(state, player, action.details as { message: string }, addToChatHistory);
+//     case 'pickup':
+//       return handlePickup(state, player, action.details as { itemId: string }, addToChatHistory);
+//     case 'drop':
+//       return handleDrop(state, player, action.details as { itemId: string }, addToChatHistory);
+//     case 'examine':
+//       return handleExamine(state, player, action.details as { targetId: string }, addToChatHistory);
+//     default:
+//       console.error('Invalid action type:', action.type);
+//       return state;
+//   }
+// }
 
 function handleMove(state: GameState, player: Player, details: { direction: string }, addToChatHistory: Function): GameState {
   const { dx, dy } = getDirectionOffset(details.direction);

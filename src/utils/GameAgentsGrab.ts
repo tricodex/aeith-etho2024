@@ -4,6 +4,7 @@ import { ethers, Contract, Log } from 'ethers';
 import ABI from './abis/UnifiedChatAgent.json';
 import { messageBus } from './MessageBus';
 import { GameState, ChatEntry, GameAction } from '@/types/gameTypes';
+import { retry } from '@lifeomic/attempt';
 
 interface Message {
   role: string;
@@ -47,7 +48,7 @@ class GameAgentsGrab {
   }
 
   async createAgent(agentType: string, message: string, maxIterations: number = 5): Promise<number> {
-    try {
+    return retry(async () => {
       const contract = this.contracts[agentType];
       if (!contract) {
         throw new Error(`Invalid agent type: ${agentType}`);
@@ -75,15 +76,16 @@ class GameAgentsGrab {
       }
 
       throw new Error("ChatCreated event not found in transaction logs");
-    } catch (err) {
-      console.error(`Error creating ${agentType} agent:`, err);
-      throw err;
-    }
+    }, {
+      maxAttempts: 3,
+      delay: 1000,
+      factor: 2,
+    });
   }
 
   async getAgentMessages(agentType: string, chatId?: number): Promise<Message[]> {
     await this.ensureAgentInitialized(agentType);
-    try {
+    return retry(async () => {
       const contract = this.contracts[agentType];
       if (!contract) {
         throw new Error(`Invalid agent type: ${agentType}`);
@@ -95,16 +97,17 @@ class GameAgentsGrab {
         role: msg.role,
         content: msg.content,
       }));
-    } catch (err) {
-      console.error(`Error getting ${agentType} agent messages:`, err);
-      throw err;
-    }
+    }, {
+      maxAttempts: 3,
+      delay: 1000,
+      factor: 2,
+    });
   }
 
   async addMessage(agentType: string, message: string, chatId?: number): Promise<void> {
     if (!this.contracts[agentType]) throw new Error(`Invalid agent type: ${agentType}`);
     
-    try {
+    return retry(async () => {
       const actualChatId = chatId || this.chatIds[agentType];
       const tx = await this.contracts[agentType].addMessage(message, actualChatId);
       await tx.wait();
@@ -114,14 +117,19 @@ class GameAgentsGrab {
         content: message,
         agentId: agentType,
       });
-    } catch (err) {
-      console.error(`Error adding message to ${agentType} agent:`, err);
-      messageBus.publish({
-        role: 'system',
-        content: `Failed to communicate with ${agentType} agent. The game will continue without this agent's input.`,
-        agentId: 'system',
-      });
-    }
+    }, {
+      maxAttempts: 3,
+      delay: 1000,
+      factor: 2,
+      handleError: (err) => {
+        console.error(`Error adding message to ${agentType} agent:`, err);
+        messageBus.publish({
+          role: 'system',
+          content: `Failed to communicate with ${agentType} agent. The game will continue without this agent's input.`,
+          agentId: 'system',
+        });
+      },
+    });
   }
 
   async generateAgentAction(agentType: string, gameState: GameState): Promise<GameAction> {
@@ -142,7 +150,13 @@ class GameAgentsGrab {
       return this.parseResponseIntoGameAction(agentType, response);
     } catch (err) {
       console.error(`Error generating action for ${agentType}:`, err);
-      return { type: 'chat', playerId: agentType, details: { message: "I'm not sure what to do." } };
+      if (err instanceof Error && err.message.includes('Chat has finished')) {
+        // Reinitialize the chat
+        await this.createAgent(agentType, 'Reinitialize agent', 2);
+        // Retry the action generation
+        return this.generateAgentAction(agentType, gameState);
+      }
+      return { type: 'chat', playerId: agentType, details: { message: "I'm having trouble processing the current situation. Could you please provide more information?" } };
     }
   }
 
