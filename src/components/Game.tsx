@@ -135,14 +135,12 @@ const AeithGame = () => {
 
   if (!gameStarted) {
     return (
-      <div className="flex items-center justify-center h-screen bg-blue-900 text-white">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">Aeith Murder Mystery Game</h1>
-          <p className="mb-8">Welcome to the Aeith Murder Mystery Game! Investigate the haunted mansion, interact with AI characters, and solve the mystery.</p>
-          <Button onClick={initGame} disabled={isLoading} className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded">
-            {isLoading ? 'Initializing...' : 'Start Game'}
-          </Button>
-        </div>
+        <div className={styles.initializationContainer}>
+        <h1 className={styles.gameTitle}>Aeith Murder Mystery Game</h1>
+        <p className={styles.gameDescription}>Welcome to the Aeith Murder Mystery Game! Investigate the haunted mansion, interact with AI characters, and solve the mystery.</p>
+        <Button onClick={initGame} disabled={isLoading} className={styles.startButton}>
+          {isLoading ? 'Initializing...' : 'Start Game'}
+        </Button>
       </div>
     );
   }
