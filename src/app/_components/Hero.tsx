@@ -73,7 +73,9 @@ const HeroSection: React.FC = () => {
   <button className="btn btn-primary neon-btn">Play Now</button>
 </Link>
 
-            <button className="btn btn-secondary">Learn More</button>
+<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank" rel="noopener noreferrer">
+  <button className="btn btn-secondary">Learn More</button>
+</a>
           </div>
         </div>
       </div>
